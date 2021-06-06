@@ -58,7 +58,10 @@ tile_cache_t tile_cache_data[3][TILE_CACHE_SIZE];
 tile_cache_t *tile_cache_ptr[3][TILE_HASH_SIZE];
 //u32 tile_cached_line[3][TILE_HASH_SIZE];
 tile_cache_t *tile_cache_first_free[3];
-u32 tile_cached[3],tile_resetask;
+u32 tile_cached[3];
+#if TILE_CACHE_RESET_ASK_MAX != 0
+u32 tile_resetask;
+#endif	
 u32 tile_cache_reset;
 u8 *tile_texture[3];  
 //multiple textures, one for each tile colour mode => 2bits/pix, 4bits, 8bits
@@ -77,13 +80,13 @@ extern int current_bitshift;
 
 // ask for a reset at next rendering pass
 
-
 void tile_askforreset(s32 addr){	
 	if (tile_cache_reset) return;
 	if (addr==-1)	{tile_cache_reset=1;	return;}
+#if TILE_CACHE_RESET_ASK_MAX != 0
 	tile_resetask++;
 	if (tile_resetask==TILE_CACHE_RESET_ASK_MAX) {tile_cache_reset=1;	return;}
-	
+#endif	
 	
 	//invalidate entries
 	u32 key=(addr>>4)&TILE_HASH_MASK;
@@ -244,7 +247,9 @@ void tile_reset_cache(){
 	//memset(tile_cache_ptr,0,3*4*TILE_HASH_SIZE);
 	//memset(tile_cached_line,0,3*4*TILE_HASH_SIZE);
 	
+#if TILE_CACHE_RESET_ASK_MAX != 0
 	tile_resetask=0;
+#endif
 	tile_cache_reset=0;
 	debug_log("resetcache");
 }
@@ -266,7 +271,9 @@ void tile_init_cache(){
 	}
 	//memset(tile_cache_ptr,0,3*4*TILE_HASH_SIZE);
 	//memset(tile_cached_line,0,3*4*TILE_HASH_SIZE);
+#if TILE_CACHE_RESET_ASK_MAX != 0
 	tile_resetask=0;
+#endif
 	tile_cache_reset=0;
 }
 }
@@ -434,7 +441,7 @@ void pspDrawTile16 (uint32 Tile, s32 x,s32 y, uint32 StartLine,uint32 LineCount)
   uint8 *pCache;
   
   TileAddr = BG.TileAddress + ((Tile & 0x3ff) << BG.TileShift);
-  if ((Tile & 0x1ff) >= 256) TileAddr += BG.NameSelect; 
+  if (Tile & 0x100) TileAddr += BG.NameSelect; 
   TileAddr &= 0xffff; 
   TileNumber = (TileAddr >> BG.TileShift);
     
@@ -497,7 +504,7 @@ return;
   uint8 *pCache;
   
   TileAddr = BG.TileAddress + ((Tile & 0x3ff) << BG.TileShift);
-  if ((Tile & 0x1ff) >= 256) TileAddr += BG.NameSelect; 
+  if (Tile & 0x100) TileAddr += BG.NameSelect; 
   TileAddr &= 0xffff; 
   TileNumber = (TileAddr >> BG.TileShift);
     
@@ -558,7 +565,7 @@ return;
   uint8 *pCache;
   
   TileAddr = BG.TileAddress + ((Tile & 0x3ff) << BG.TileShift);
-  if ((Tile & 0x1ff) >= 256) TileAddr += BG.NameSelect; 
+  if (Tile & 0x100) TileAddr += BG.NameSelect; 
   TileAddr &= 0xffff; 
   TileNumber = (TileAddr >> BG.TileShift);
     
@@ -620,7 +627,7 @@ return;
   uint8 *pCache;
   
   TileAddr = BG.TileAddress + ((Tile & 0x3ff) << BG.TileShift);
-  if ((Tile & 0x1ff) >= 256) TileAddr += BG.NameSelect; 
+  if (Tile & 0x100) TileAddr += BG.NameSelect; 
   TileAddr &= 0xffff; 
   TileNumber = (TileAddr >> BG.TileShift);
     
@@ -682,7 +689,7 @@ return;
   uint8 *pCache;
   
   TileAddr = BG.TileAddress + ((Tile & 0x3ff) << BG.TileShift);
-  if ((Tile & 0x1ff) >= 256) TileAddr += BG.NameSelect; 
+  if (Tile & 0x100) TileAddr += BG.NameSelect; 
   TileAddr &= 0xffff; 
   TileNumber = (TileAddr >> BG.TileShift);
     

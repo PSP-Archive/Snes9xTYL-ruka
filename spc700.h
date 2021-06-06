@@ -98,31 +98,31 @@
 #define Overflow   64
 #define Negative  128
 
-#define APUClearCarry() (((IAPU->_Carry)) = 0)
-#define APUSetCarry() (((IAPU->_Carry)) = 1)
-#define APUSetInterrupt() ((APURegisters->P) |= Interrupt)
-#define APUClearInterrupt() ((APURegisters->P) &= ~Interrupt)
-#define APUSetHalfCarry() ((APURegisters->P) |= HalfCarry)
-#define APUClearHalfCarry() ((APURegisters->P) &= ~HalfCarry)
-#define APUSetBreak() ((APURegisters->P) |= BreakFlag)
-#define APUClearBreak() ((APURegisters->P) &= ~BreakFlag)
-#define APUSetDirectPage() ((APURegisters->P) |= DirectPageFlag)
-#define APUClearDirectPage() ((APURegisters->P) &= ~DirectPageFlag)
-#define APUSetOverflow() (((IAPU->_Overflow)) = 1)
-#define APUClearOverflow() (((IAPU->_Overflow)) = 0)
+#define APUClearCarry() (APUPack.IAPU._Carry = 0)
+#define APUSetCarry() (APUPack.IAPU._Carry = 1)
+#define APUSetInterrupt() (APUPack.APURegisters.P |= Interrupt)
+#define APUClearInterrupt() (APUPack.APURegisters.P &= ~Interrupt)
+#define APUSetHalfCarry() (APUPack.APURegisters.P |= HalfCarry)
+#define APUClearHalfCarry() (APUPack.APURegisters.P &= ~HalfCarry)
+#define APUSetBreak() (APUPack.APURegisters.P |= BreakFlag)
+#define APUClearBreak() (APUPack.APURegisters.P &= ~BreakFlag)
+#define APUSetDirectPage() (APUPack.APURegisters.P |= DirectPageFlag)
+#define APUClearDirectPage() (APUPack.APURegisters.P &= ~DirectPageFlag)
+#define APUSetOverflow() (APUPack.IAPU._Overflow = 1)
+#define APUClearOverflow() (APUPack.IAPU._Overflow = 0)
 
-#define APUCheckZero() (((IAPU->_Zero)) == 0)
-#define APUCheckCarry() (((IAPU->_Carry)))
-#define APUCheckInterrupt() ((APURegisters->P) & Interrupt)
-#define APUCheckHalfCarry() ((APURegisters->P) & HalfCarry)
-#define APUCheckBreak() ((APURegisters->P) & BreakFlag)
-#define APUCheckDirectPage() ((APURegisters->P) & DirectPageFlag)
-#define APUCheckOverflow() (((IAPU->_Overflow)))
-#define APUCheckNegative() (((IAPU->_Zero)) & 0x80)
+#define APUCheckZero() (APUPack.IAPU._Zero == 0)
+#define APUCheckCarry() (APUPack.IAPU._Carry)
+#define APUCheckInterrupt() (APUPack.APURegisters.P & Interrupt)
+#define APUCheckHalfCarry() (APUPack.APURegisters.P & HalfCarry)
+#define APUCheckBreak() (APUPack.APURegisters.P & BreakFlag)
+#define APUCheckDirectPage() (APUPack.APURegisters.P & DirectPageFlag)
+#define APUCheckOverflow() (APUPack.IAPU._Overflow)
+#define APUCheckNegative() (APUPack.IAPU._Zero & 0x80)
 
-#define APUClearFlags(f) ((APURegisters->P) &= ~(f))
-#define APUSetFlags(f)   ((APURegisters->P) |=  (f))
-#define APUCheckFlag(f)  ((APURegisters->P) &   (f))
+#define APUClearFlags(f) (APUPack.APURegisters.P &= ~(f))
+#define APUSetFlags(f)   (APUPack.APURegisters.P |=  (f))
+#define APUCheckFlag(f)  (APUPack.APURegisters.P &   (f))
 
 typedef union
 {
@@ -152,160 +152,185 @@ struct SAPURegisters{
 
 // 1.953us := 1.024065.54MHz
 
+#define APU_SETAPURAM() {\
+  SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);\
+  int apu_ram_write_cpt1_,apu_ram_write_cpt2_; \
+  apu_ram_write_cpt1_=pEvent->apu_ram_write_cpt1;\
+  apu_ram_write_cpt2_=pEvent->apu_ram_write_cpt2;\
+  if (apu_ram_write_cpt1_<apu_ram_write_cpt2_) { \
+    int cpt;\
+    for (cpt=apu_ram_write_cpt1_;cpt<apu_ram_write_cpt2_;cpt++) {\
+        unsigned short dwValue = pEvent->apu_ram_write_log[cpt & 0xFFFF];\
+        APUPack.IAPU.RAM[((dwValue>>8) & 3) | 0xF4] = dwValue & 0xFF;\
+    }\
+    pEvent->apu_ram_write_cpt1=apu_ram_write_cpt2_;\
+  }\
+}
 
 #define APU_EXECUTE3() { \
-int apu_target_cycles_=*apu_glob_cycles;\
-if ((APUuncached->Cycles)<=apu_target_cycles_) {\
-  int apu_event1_cpt1_,apu_event2_cpt1_;\
-  int apu_event1_cpt2_,apu_event2_cpt2_;\
-  int apu_ram_write_cpt1_,apu_ram_write_cpt2_; \
-  APU->Cycles=APUuncached->Cycles; \
-  apu_event1_cpt1_=*apu_event1_cpt1;\
-  apu_event2_cpt1_=*apu_event2_cpt1;\
-  apu_event1_cpt2_=*apu_event1_cpt2;\
-  apu_event2_cpt2_=*apu_event2_cpt2;\
-  apu_ram_write_cpt1_=*apu_ram_write_cpt1;\
-  apu_ram_write_cpt2_=*apu_ram_write_cpt2;\
-  if (apu_ram_write_cpt1_<apu_ram_write_cpt2_) { \
-  	int cpt;\
-  	for (cpt=apu_ram_write_cpt1_;cpt<apu_ram_write_cpt2_;cpt++) (IAPU->RAM)[(apu_ram_write_log[cpt&(65536*2-1)]>>8)|0xF4]=apu_ram_write_log[cpt&(65536*2-1)]&0xFF;	\
-		(*apu_ram_write_cpt1)=apu_ram_write_cpt2_;\
-	}  \
-	while (APU->Cycles<=apu_target_cycles_) {\
-		(APU->Cycles)+=S9xAPUCycles [*(IAPU->PC)];\
-		(*S9xApuOpcodes[*(IAPU->PC)]) (); \
+ volatile SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);\
+ int apu_target_cycles_=pEvent->apu_glob_cycles;\
+ if (pEvent->APU_Cycles<=apu_target_cycles_) {\
+  int apu_event1_cpt1_,apu_event1_cpt2_;\
+  APUPack.APU.Cycles=pEvent->APU_Cycles; \
+  apu_event1_cpt1_=pEvent->apu_event1_cpt1;\
+  apu_event1_cpt2_=pEvent->apu_event1_cpt2;\
+	while (APUPack.APU.Cycles<=apu_target_cycles_) {\
+		APUPack.APU.Cycles+=S9xAPUCycles [*(APUPack.IAPU.PC)];\
+		S9xApuOpcodes[*(APUPack.IAPU.PC)](); \
 		while (apu_event1_cpt1_<apu_event1_cpt2_) {\
-			if (APU->Cycles>=apu_event1[apu_event1_cpt1_&(65536*2-1)]) {\
+		    uint32 EventVal = pEvent->apu_event1[apu_event1_cpt1_ & 0xFFFF];\
+			uint32 V_Counter = EventVal & 0x80000000;\
+			EventVal &= 0x7FFFFFFF;\
+			if (APUPack.APU.Cycles>=EventVal) {\
 				apu_event1_cpt1_++;\
-				if (((APU->TimerEnabled)) [2]) {\
-					((APU->Timer)) [2] += 4;\
-					while (((APU->Timer)) [2] >= ((APU->TimerTarget)) [2]) {\
-		  			((IAPU->RAM)) [0xff] = (((IAPU->RAM)) [0xff] + 1) & 0xf;\
-		  			((APU->Timer)) [2] -= ((APU->TimerTarget)) [2];\
+				if ((APUPack.APU.TimerEnabled) [2]) {\
+					(APUPack.APU.Timer) [2] += 4;\
+					while (APUPack.APU.Timer[2] >= APUPack.APU.TimerTarget[2]) {\
+		  			APUPack.IAPU.RAM[0xff] = (APUPack.IAPU.RAM[0xff] + 1) & 0xf;\
+		  			APUPack.APU.Timer[2] -= APUPack.APU.TimerTarget[2];\
+					}\
+				}\
+				if (V_Counter) {\
+					if (APUPack.APU.TimerEnabled[0]) {\
+		  			APUPack.APU.Timer[0]++;\
+		  			if (APUPack.APU.Timer[0] >= APUPack.APU.TimerTarget[0]) {\
+							APUPack.IAPU.RAM[0xfd] = (APUPack.IAPU.RAM[0xfd] + 1) & 0xf;\
+							APUPack.APU.Timer[0] = 0;\
+					  }\
+					}\
+					if (APUPack.APU.TimerEnabled[1]) {\
+		  			APUPack.APU.Timer[1]++;\
+		  			if (APUPack.APU.Timer[1] >= APUPack.APU.TimerTarget[1]) {\
+							APUPack.IAPU.RAM[0xfe] = (APUPack.IAPU.RAM[0xfe] + 1) & 0xf;\
+							APUPack.APU.Timer[1] = 0;\
+			  		}\
 					}\
 				}\
 			} else break;\
 		}\
-		while (apu_event2_cpt1_<apu_event2_cpt2_) {\
-			if (APU->Cycles>=apu_event2[apu_event2_cpt1_&(65536*2-1)]) {\
-				apu_event2_cpt1_++;\
-				if (((APU->TimerEnabled)) [0]) {\
-		  		((APU->Timer)) [0]++;\
-		  		if (((APU->Timer)) [0] >= ((APU->TimerTarget)) [0]) {\
-						((IAPU->RAM)) [0xfd] = (((IAPU->RAM)) [0xfd] + 1) & 0xf;\
-						((APU->Timer)) [0] = 0;\
-				  }\
-				}\
-				if (((APU->TimerEnabled)) [1]) {\
-		  		((APU->Timer)) [1]++;\
-		  		if (((APU->Timer)) [1] >= ((APU->TimerTarget)) [1]) {\
-						((IAPU->RAM)) [0xfe] = (((IAPU->RAM)) [0xfe] + 1) & 0xf;\
-						((APU->Timer)) [1] = 0;\
-			  	}\
-				}\
-			} else break;\
-		}\
-}\
-*((int*)(APUuncached->OutPorts))=*((int*)(APU->OutPorts)); \
-(*apu_event1_cpt1)=apu_event1_cpt1_;\
-(*apu_event2_cpt1)=apu_event2_cpt1_;\
- APUuncached->Cycles=APU->Cycles; \
+	}\
+ *((int*)(pEvent->APU_OutPorts))=*((int*)(APUPack.APU.OutPorts)); \
+ pEvent->apu_event1_cpt1=apu_event1_cpt1_;\
+ pEvent->APU_Cycles=APUPack.APU.Cycles; \
 } \
 }
 
+
 #ifdef ME_SOUND
-#define APU_EXECUTE2() if ((APUuncached->Cycles)<=(*apu_glob_cycles)) {\
+#define APU_EXECUTE2() {\
+volatile SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);\
+int nApuCycles = pEvent->apu_glob_cycles;\
+if ((pEvent->APU_Cycles)<=nApuCycles) {\
 int dummy=0;\
-volatile int32 *cycles;\
-cycles=&(APUuncached->Cycles);\
-for (;;) {\
-	if ((*cycles)>(*apu_glob_cycles)) break; \
+int nCounter = 0;\
+while (1) {\
+	if (pEvent->APU_Cycles>nApuCycles) break; \
 	dummy=rand()+dummy;\
+	nCounter++;\
+if (nCounter > 10000000) {\
+	while (1) {\
+		char st[108];\
+		pgPrintBG(0,7,0xFFFF,"maybe deadlock(in APU_EXECUTE2)");\
+		sprintf(st,"param MAIN%08X ME%08X", pEvent->dwDeadlockTestMain,pEvent->dwDeadlockTestMe);\
+		pgPrintBG(0,8,0xFFFF,st);\
+		sprintf(st,"APU%X", pEvent->IAPU_APUExecuting);\
+		pgPrintBG(0,3,0xFFFF,st);\
+		sprintf(st,"E1[%04X,%04X] E2[%04X,%04X], RW[%04X,%04X]",\
+			pEvent->apu_event1_cpt1&0xFFFF, pEvent->apu_event1_cpt2&0xFFFF,\
+			pEvent->apu_ram_write_cpt1&0xFFFF, pEvent->apu_ram_write_cpt2&0xFFFF);\
+		pgPrintBG(0,4,0xFFFF,st);\
+		sprintf(st,"APUCycles%08X, %08X, %08X",\
+			pEvent->APU_Cycles, pEvent->apu_glob_cycles, cpu_glob_cycles);\
+		pgPrintBG(0,5,0xFFFF,st);\
+		sprintf(st,"%08X,%08X,%08X,%08X",\
+			pEvent->adwParam[0], pEvent->adwParam[1], pEvent->adwParam[2], pEvent->adwParam[3]);\
+		pgPrintBG(0,6,0xFFFF,st);\
+		pgScreenFlipV();\
+	}\
 }\
-*apu_glob_cycles-=cpu_glob_cycles;\
-APUuncached->Cycles-=cpu_glob_cycles;\
+}\
+pEvent->apu_glob_cycles = nApuCycles - cpu_glob_cycles;\
+pEvent->APU_Cycles-=cpu_glob_cycles;\
 cpu_glob_cycles=0;\
-if (*apu_event1_cpt1<*apu_event1_cpt2) { \
+if (pEvent->apu_event1_cpt1<pEvent->apu_event1_cpt2) { \
 	int i,j;\
-	j=*apu_event1_cpt2;\
-	for (i=*apu_event1_cpt1;i<j;i++) apu_event1[i&(65536*2-1)]=0;\
+	j=pEvent->apu_event1_cpt2;\
+	for (i=pEvent->apu_event1_cpt1;i<j;i++) pEvent->apu_event1[i & 0xFFFF]=0;\
 }\
-if (*apu_event2_cpt1<*apu_event2_cpt2) { \
-	int i,j;\
-	j=*apu_event2_cpt2;\
-	for (i=*apu_event2_cpt1;i<j;i++) apu_event2[i&(65536*2-1)]=0;\
 }\
 }
 #else
 #define APU_EXECUTE2() { \
-if ((APUuncached->Cycles)<=*apu_glob_cycles) {\
-	int apu_target_cycles_=*apu_glob_cycles;\
+volatile SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);\
+if ((pEvent->APU_Cycles)<=pEvent->apu_glob_cycles) {\
+	int apu_target_cycles_=pEvent->apu_glob_cycles;\
   int apu_event1_cpt1_,apu_event2_cpt1_;\
   int apu_event1_cpt2_,apu_event2_cpt2_;\
   int apu_ram_write_cpt1_,apu_ram_write_cpt2_; \
-  APU->Cycles=APUuncached->Cycles; \
-  apu_event1_cpt1_=*apu_event1_cpt1;\
-  apu_event2_cpt1_=*apu_event2_cpt1;\
-  apu_event1_cpt2_=*apu_event1_cpt2;\
-  apu_event2_cpt2_=*apu_event2_cpt2;\
-  apu_ram_write_cpt1_=*apu_ram_write_cpt1;\
-  apu_ram_write_cpt2_=*apu_ram_write_cpt2;\
+  APUPack.APU.Cycles=pEvent->APU_Cycles; \
+  apu_event1_cpt1_=pEvent->apu_event1_cpt1;\
+  apu_event2_cpt1_=pEvent->apu_event2_cpt1;\
+  apu_event1_cpt2_=pEvent->apu_event1_cpt2;\
+  apu_event2_cpt2_=pEvent->apu_event2_cpt2;\
+  apu_ram_write_cpt1_=pEvent->apu_ram_write_cpt1;\
+  apu_ram_write_cpt2_=pEvent->apu_ram_write_cpt2;\
   if (apu_ram_write_cpt1_<apu_ram_write_cpt2_) { \
   	int cpt;\
-  	for (cpt=apu_ram_write_cpt1_;cpt<apu_ram_write_cpt2_;cpt++) (IAPU->RAM)[(apu_ram_write_log[cpt&(65536*2-1)]>>8)|0xF4]=apu_ram_write_log[cpt&(65536*2-1)]&0xFF;	\
-		(*apu_ram_write_cpt1)=apu_ram_write_cpt2_;\
+  	for (cpt=apu_ram_write_cpt1_;cpt<apu_ram_write_cpt2_;cpt++) (APUPack.IAPU.RAM)[(pEvent->apu_ram_write_log[cpt & 0xFFFF]>>8)|0xF4]=pEvent->apu_ram_write_log[cpt&(65536*2-1)]&0xFF;\
+		pEvent->apu_ram_write_cpt1=apu_ram_write_cpt2_;\
 	}  \
-	while (APU->Cycles<=apu_target_cycles_) {\
-		(APU->Cycles)+=S9xAPUCycles [*(IAPU->PC)];\
-		(*S9xApuOpcodes[*(IAPU->PC)]) (); \
+	while (APUPack.APU.Cycles<=apu_target_cycles_) {\
+		(APUPack.APU.Cycles)+=S9xAPUCycles [*(APUPack.IAPU.PC)];\
+		(*S9xApuOpcodes[*(APUPack.IAPU.PC)]) (); \
 		while (apu_event1_cpt1_<apu_event1_cpt2_) {\
-			if (APU->Cycles>=apu_event1[apu_event1_cpt1_&(65536*2-1)]) {\
+			if (APUPack.APU.Cycles>=pEvent->apu_event1[apu_event1_cpt1_ & 0xFFFF]) {\
 				apu_event1_cpt1_++;\
-				if (((APU->TimerEnabled)) [2]) {\
-					((APU->Timer)) [2] += 4;\
-					while (((APU->Timer)) [2] >= ((APU->TimerTarget)) [2]) {\
-		  			((IAPU->RAM)) [0xff] = (((IAPU->RAM)) [0xff] + 1) & 0xf;\
-		  			((APU->Timer)) [2] -= ((APU->TimerTarget)) [2];\
+				if (APUPack.APU.TimerEnabled[2]) {\
+					APUPack.APU.Timer[2] += 4;\
+					while (PUPack.APU.Timer[2] >= APUPack.APU.TimerTarget[2]) {\
+		  			APUPack.IAPU.RAM [0xff] = (APUPack.IAPU.RAM[0xff] + 1) & 0xf;\
+		  			APUPack.APU.Timer [2] -= APUPack.APU.TimerTarget[2];\
 					}\
 				}\
 			} else break;\
 		}\
 		while (apu_event2_cpt1_<apu_event2_cpt2_) {\
-			if (APU->Cycles>=apu_event2[apu_event2_cpt1_&(65536*2-1)]) {\
+			if (APUPack.APU.Cycles>=pEvent->apu_event2[apu_event2_cpt1_ & 0xFFFF]) {\
 				apu_event2_cpt1_++;\
-				if (((APU->TimerEnabled)) [0]) {\
-		  		((APU->Timer)) [0]++;\
-		  		if (((APU->Timer)) [0] >= ((APU->TimerTarget)) [0]) {\
-						((IAPU->RAM)) [0xfd] = (((IAPU->RAM)) [0xfd] + 1) & 0xf;\
-						((APU->Timer)) [0] = 0;\
+				if (APUPack.APU.TimerEnabled[0]) {\
+		  		APUPack.APU.Timer[0]++;\
+		  		if (APUPack.APU.Timer[0] >= APUPack.APU.TimerTarget[0]) {\
+						APUPack.IAPU.RAM[0xfd] = (APUPack.IAPU.RAM[0xfd] + 1) & 0xf;\
+						APUPack.APU.Timer[0] = 0;\
 				  }\
 				}\
-				if (((APU->TimerEnabled)) [1]) {\
-		  		((APU->Timer)) [1]++;\
-		  		if (((APU->Timer)) [1] >= ((APU->TimerTarget)) [1]) {\
-						((IAPU->RAM)) [0xfe] = (((IAPU->RAM)) [0xfe] + 1) & 0xf;\
-						((APU->Timer)) [1] = 0;\
+				if (APUPack.APU.TimerEnabled[1]) {\
+		  		APUPack.APU.Timer[1]++;\
+		  		if (APUPack.APU.Timer[1] >= APUPack.APU.TimerTarget[1]) {\
+						APUPack.IAPU.RAM[0xfe] = (APUPack.IAPU.RAM [0xfe] + 1) & 0xf;\
+						APUPack.APU.Timer[1] = 0;\
 			  	}\
 				}\
 			} else break;\
 		}\
 }\
-*((int*)(APUuncached->OutPorts))=*((int*)(APU->OutPorts)); \
-(*apu_event1_cpt1)=apu_event1_cpt1_;\
-(*apu_event2_cpt1)=apu_event2_cpt1_;\
- APUuncached->Cycles=APU->Cycles; \
-*apu_glob_cycles-=cpu_glob_cycles;\
-APUuncached->Cycles-=cpu_glob_cycles;\
+*((int*)(pEvent->APU_OutPorts))=*((int*)(APUPack.APU.OutPorts)); \
+pEvent->apu_event1_cpt1=apu_event1_cpt1_;\
+pEvent->apu_event2_cpt1=apu_event2_cpt1_;\
+ pEvent->APU_Cycles=APUPack.APU.Cycles; \
+pEvent->apu_glob_cycles-=cpu_glob_cycles;\
+pEvent->APU_Cycles-=cpu_glob_cycles;\
 cpu_glob_cycles=0;\
-if (*apu_event1_cpt1<*apu_event1_cpt2) { \
+if (pEvent->apu_event1_cpt1<pEvent->apu_event1_cpt2) { \
 	int i,j;\
-	j=*apu_event1_cpt2;\
-	for (i=*apu_event1_cpt1;i<j;i++) apu_event1[i&(65536*2-1)]=0;\
+	j=pEvent->apu_event1_cpt2;\
+	for (i=pEvent->apu_event1_cpt1;i<j;i++) pEvent->apu_event1[i & 0xFFFF]=0;\
 }\
-if (*apu_event2_cpt1<*apu_event2_cpt2) { \
+if (pEvent->apu_event2_cpt1<pEvent->apu_event2_cpt2) { \
 	int i,j;\
-	j=*apu_event2_cpt2;\
-	for (i=*apu_event2_cpt1;i<j;i++) apu_event2[i&(65536*2-1)]=0;\
+	j=pEvent->apu_event2_cpt2;\
+	for (i=pEvent->apu_event2_cpt1;i<j;i++) pEvent->apu_event2[i & 0xFFFF]=0;\
 }\
 } \
 }

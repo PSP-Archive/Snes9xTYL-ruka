@@ -89,7 +89,7 @@ static int BandCompare (const void *d1, const void *d2)
 
 void ComputeClipWindows ()
 {
-    struct ClipData *pClip = &IPPU.Clip [0];
+    struct ClipData *pClip = &PPUPack.IPPU.Clip [0];
 
     // Loop around the main screen then the sub-screen.
     for (int c = 0; c < 2; c++, pClip++)
@@ -110,9 +110,9 @@ void ComputeClipWindows ()
 			// completely clip everything.
 			for (int i = 0; i < 6; i++)
 			{
-			    IPPU.Clip [c].Count [i] = 1;
-			    IPPU.Clip [c].Left [0][i] = 1;
-			    IPPU.Clip [c].Right [0][i] = 0;
+			    PPUPack.IPPU.Clip [c].Count [i] = 1;
+			    PPUPack.IPPU.Clip [c].Left [0][i] = 1;
+			    PPUPack.IPPU.Clip [c].Right [0][i] = 0;
 			}
 			continue;
 		    }
@@ -129,9 +129,9 @@ void ComputeClipWindows ()
 			// clip everything.
 			for (int i = 0; i < 6; i++)
 			{
-			    IPPU.Clip [1].Count [i] = 1;
-			    IPPU.Clip [1].Left [0][i] = 1;
-			    IPPU.Clip [1].Right [0][i] = 0;
+			    PPUPack.IPPU.Clip [1].Count [i] = 1;
+			    PPUPack.IPPU.Clip [1].Left [0][i] = 1;
+			    PPUPack.IPPU.Clip [1].Right [0][i] = 0;
 			}
 			return;
 		    }
@@ -157,25 +157,25 @@ void ComputeClipWindows ()
 		    if (w == 5 ||
 			(FillRAM [0x212c + c] & FillRAM [0x212e + c] & (1 << w)))
 		    {
-			if (PPU.ClipWindow1Enable [w])
+			if (PPUPack.PPU.ClipWindow1Enable [w])
 			{
-			    if (!PPU.ClipWindow1Inside [w])
+			    if (!PPUPack.PPU.ClipWindow1Inside [w])
 			    {
-				Win1[Window1Enabled].Left = PPU.Window1Left;
-				Win1[Window1Enabled++].Right = PPU.Window1Right + 1;
+				Win1[Window1Enabled].Left = PPUPack.PPU.Window1Left;
+				Win1[Window1Enabled++].Right = PPUPack.PPU.Window1Right + 1;
 			    }
 			    else
 			    {
-				if (PPU.Window1Left <= PPU.Window1Right)
+				if (PPUPack.PPU.Window1Left <= PPUPack.PPU.Window1Right)
 				{
-				    if (PPU.Window1Left > 0)
+				    if (PPUPack.PPU.Window1Left > 0)
 				    {
 					Win1[Window1Enabled].Left = 0;
-					Win1[Window1Enabled++].Right = PPU.Window1Left;
+					Win1[Window1Enabled++].Right = PPUPack.PPU.Window1Left;
 				    }
-				    if (PPU.Window1Right < 255)
+				    if (PPUPack.PPU.Window1Right < 255)
 				    {
-					Win1[Window1Enabled].Left = PPU.Window1Right + 1;
+					Win1[Window1Enabled].Left = PPUPack.PPU.Window1Right + 1;
 					Win1[Window1Enabled++].Right = 256;
 				    }
 				    if (Window1Enabled == 0)
@@ -193,25 +193,25 @@ void ComputeClipWindows ()
 				}
 			    }
 			}
-			if (PPU.ClipWindow2Enable [w])
+			if (PPUPack.PPU.ClipWindow2Enable [w])
 			{
-			    if (!PPU.ClipWindow2Inside [w])
+			    if (!PPUPack.PPU.ClipWindow2Inside [w])
 			    {
-				Win2[Window2Enabled].Left = PPU.Window2Left;
-				Win2[Window2Enabled++].Right = PPU.Window2Right + 1;
+				Win2[Window2Enabled].Left = PPUPack.PPU.Window2Left;
+				Win2[Window2Enabled++].Right = PPUPack.PPU.Window2Right + 1;
 			    }
 			    else
 			    {
-				if (PPU.Window2Left <= PPU.Window2Right)
+				if (PPUPack.PPU.Window2Left <= PPUPack.PPU.Window2Right)
 				{
-				    if (PPU.Window2Left > 0)
+				    if (PPUPack.PPU.Window2Left > 0)
 				    {
 					Win2[Window2Enabled].Left = 0;
-					Win2[Window2Enabled++].Right = PPU.Window2Left;
+					Win2[Window2Enabled++].Right = PPUPack.PPU.Window2Left;
 				    }
-				    if (PPU.Window2Right < 255)
+				    if (PPUPack.PPU.Window2Right < 255)
 				    {
-					Win2[Window2Enabled].Left = PPU.Window2Right + 1;
+					Win2[Window2Enabled].Left = PPUPack.PPU.Window2Right + 1;
 					Win2[Window2Enabled++].Right = 256;
 				    }
 				    if (Window2Enabled == 0)
@@ -239,7 +239,7 @@ void ComputeClipWindows ()
 			
 			struct Band Bands [6];
 			int B = 0;
-			switch (PPU.ClipWindowOverlapLogic [w] ^ 1)
+			switch (PPUPack.PPU.ClipWindowOverlapLogic [w] ^ 1)
 			{
 			case CLIP_OR:
 			    if (Window1Enabled == 1)

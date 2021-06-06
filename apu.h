@@ -93,85 +93,105 @@
 #include "spc700.h"
 
 extern int old_cpu_cycles;
-extern volatile int *apu_cycles_left,*apu_glob_cycles;
-extern volatile int *apu_event1,*apu_event2,*apu_event1_cpt1,*apu_event2_cpt1,*apu_event1_cpt2,*apu_event2_cpt2;
-extern volatile unsigned short *apu_ram_write_log;
-extern volatile int *apu_init_after_load,*apu_can_execute,*apu_ram_write_cpt1,*apu_ram_write_cpt2;
+
+typedef struct {
+	int apu_glob_cycles;						// me:r main:rw
+	int	apu_event1_cpt1;						// me:rw main:r
+	int	apu_event1_cpt2;						// me:r main:rw
+//	int	apu_event2_cpt1;						// me:rw main:r
+//	int	apu_event2_cpt2;						// me:r main:rw
+	int32 APU_Cycles;							// me:rw main:rw <-danger? TBD
+	bool8 IAPU_APUExecuting;					// me:rw main:w(DMA)
+	int	apu_ram_write_cpt1;						// me:rw main:r
+	int	apu_ram_write_cpt2;						// me:r main:rw
+    uint8 APU_OutPorts[4];						// me:w main:r
+	uint32 dwDeadlockTestMain;					// main:rw
+	uint32 dwDeadlockTestMe;					// me:w main:r
+	uint32 adwParam[4];							// me:w main:r
+//	uint32 dwDummy[1];							// me: main:
+	int apu_event1[0xFFFF];						// me:r main:w
+//	int apu_event2[0xFFFF];						// me:r main:w
+	unsigned short apu_ram_write_log[0xFFFF];	// me:r main:w 
+}SAPUEVENTS;
+
+extern SAPUEVENTS stAPUEvents;
+
+typedef struct {
+	int Loop [16];
+	int FilterTaps [8];
+	unsigned long Z;
+	uint8 KeyOn;
+	uint8 KeyOnPrev;
+	unsigned long dwDummy[6];
+} SOUNDUX_LOCAL;
+
+extern SOUNDUX_LOCAL stSoundux;
 
 struct SIAPU
 {
     uint8  *PC;
     uint8  *RAM;
     uint8  *DirectPage;
-    bool8  APUExecuting;
-    uint8  Bit;
-    uint32 Address;
-    uint8  *WaitAddress1;
-    uint8  *WaitAddress2;
-    uint32 WaitCounter;
+//    uint8  Bit;
+//    uint32 Address;
+//    uint8  *WaitAddress1;	<- SPC700_SHUTDOWN only
+//    uint8  *WaitAddress2;	<- SPC700_SHUTDOWN only
+//    uint32 WaitCounter;	<- SPC700_SHUTDOWN only
 //    uint8  *ShadowRAM;
 //    uint8  *CachedSamples;
+//    bool8  APUExecuting;
     uint8  _Carry;
     uint8  _Zero;
     uint8  _Overflow;
-    uint32 TimerErrorCounter;
-    int32  NextAPUTimerPos;
-    int32  APUTimerCounter;
-    uint32 Scanline;
-    int32  OneCycle;
-    int32  TwoCycles;
+//    uint32 TimerErrorCounter;
+//    int32  NextAPUTimerPos;
+//    int32  APUTimerCounter;
+//    uint32 Scanline;
+    uint16  OneCycle;
+    uint16  TwoCycles;
+//	uint32 dwDummy[11];	// aligned dummy
 };
 
 struct SAPU
 {
     int32  Cycles;
+    uint8  OutPorts [4];
     bool8  ShowROM;
     uint8  Flags;
     uint8  KeyedChannels;
-    uint8  dummy_for_align;
-    uint8  OutPorts [4];
-    uint8  DSP [0x80];
-    uint8  ExtraRAM [64];
     uint16 Timer [3];
     uint16 TimerTarget [3];
     bool8  TimerEnabled [3];
     bool8  TimerValueWritten [3];
+	uint32 dwDummy;	// aligned dummy
+    uint8  DSP [0x80];
+    uint8  ExtraRAM [64];
 };
 
+struct SAPUPACK
+{
+	struct SAPURegisters APURegisters;	// 8bytes
+	struct SIAPU IAPU;					// 20bytes
+	struct SAPU APU;					// 228bytes
+};
 
-EXTERN_C  struct SAPU *APU;
-EXTERN_C  struct SAPU *APUuncached;
-EXTERN_C  struct SIAPU *IAPU;
-EXTERN_C  struct SIAPU *IAPUuncached;
-EXTERN_C  struct SAPURegisters *APURegisters;
-EXTERN_C  struct SAPURegisters *APURegistersUncached;
+EXTERN_C  struct SAPUPACK APUPack;
+//EXTERN_C  struct SAPU APU;
+//EXTERN_C  struct SIAPU IAPU;
+//EXTERN_C  struct SAPURegisters APURegisters;
 
 static inline void S9xAPUUnpackStatus()
 {
-    ((IAPU->_Zero)) = (((APURegisters->P) & Zero) == 0) | ((APURegisters->P) & Negative);
-    ((IAPU->_Carry)) = ((APURegisters->P) & Carry);
-    ((IAPU->_Overflow)) = ((APURegisters->P) & Overflow) >> 6;
+    ((APUPack.IAPU._Zero)) = (((APUPack.APURegisters.P) & Zero) == 0) | ((APUPack.APURegisters.P) & Negative);
+    ((APUPack.IAPU._Carry)) = ((APUPack.APURegisters.P) & Carry);
+    ((APUPack.IAPU._Overflow)) = ((APUPack.APURegisters.P) & Overflow) >> 6;
 }
 
 STATIC inline void S9xAPUPackStatus()
 {
-    (APURegisters->P) &= ~(Zero | Negative | Carry | Overflow);
-    (APURegisters->P) |= ((IAPU->_Carry)) | ((((IAPU->_Zero)) == 0) << 1) |
-		      (((IAPU->_Zero)) & 0x80) | (((IAPU->_Overflow)) << 6);
-}
-
-static inline void S9xAPUUnpackStatusUncached()
-{
-    ((IAPUuncached->_Zero)) = (((APURegistersUncached->P) & Zero) == 0) | ((APURegistersUncached->P) & Negative);
-    ((IAPUuncached->_Carry)) = ((APURegistersUncached->P) & Carry);
-    ((IAPUuncached->_Overflow)) = ((APURegistersUncached->P) & Overflow) >> 6;
-}
-
-STATIC inline void S9xAPUPackStatusUncached()
-{
-    (APURegistersUncached->P) &= ~(Zero | Negative | Carry | Overflow);
-    (APURegistersUncached->P) |= ((IAPUuncached->_Carry)) | ((((IAPUuncached->_Zero)) == 0) << 1) |
-		      (((IAPUuncached->_Zero)) & 0x80) | (((IAPUuncached->_Overflow)) << 6);
+    (APUPack.APURegisters.P) &= ~(Zero | Negative | Carry | Overflow);
+    (APUPack.APURegisters.P) |= ((APUPack.IAPU._Carry)) | ((((APUPack.IAPU._Zero)) == 0) << 1) |
+		      (((APUPack.IAPU._Zero)) & 0x80) | (((APUPack.IAPU._Overflow)) << 6);
 }
 
 START_EXTERN_C
@@ -187,13 +207,13 @@ uint8 S9xGetAPUDSP ();
 void S9xSetAPUTimer (uint16 Address, uint8 byte);
 
 bool8 S9xInitSound (int quality, bool8 stereo, int buffer_size);
-void S9xFreeSound ();
-void S9xAllocSound ();
 void S9xOpenCloseSoundTracingFile (bool8);
 void S9xPrintAPUState ();
-extern int32 S9xAPUCycles [256];	// Scaled cycle lengths
-extern int32 S9xAPUCycleLengths [256];	// Raw data.
+extern uint16 S9xAPUCycles [256];	// Scaled cycle lengths
+extern uint8 S9xAPUCycleLengths [256];	// Raw data.
 extern void (*S9xApuOpcodes [256]) (void);
+void S9xSuspendSoundProcess(void);
+void S9xResumeSoundProcess(void);
 END_EXTERN_C
 
 

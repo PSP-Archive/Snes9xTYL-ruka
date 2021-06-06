@@ -78,16 +78,33 @@ void asmClearScreenFast16(uint8 *scr,uint32 starty,uint32 endy,uint32 back)
 {
 	int sizey=endy-starty+1;
 	uint32 *p=(uint32*)(scr+starty*256*2);
-	for (int i=(sizey*256*2>>2);i;i--)
-		*p++=back;
+	for (int i=(sizey*256*2>>5);i;i--) {
+		p[0]=back;
+		p[1]=back;
+		p[2]=back;
+		p[3]=back;
+		p[4]=back;
+		p[5]=back;
+		p[6]=back;
+		p[7]=back;
+		p+=8;
+	}
 }
 void asmClearScreenFast8(uint8 *scr,uint32 starty,uint32 endy,uint32 back)
 {
 	int sizey=endy-starty+1;
 	uint32 *p=(uint32*)(scr+starty*256);
-	for (int i=(sizey*256>>2);i;i--)
-		*p++=back;
-
+	for (int i=(sizey*256>>5);i;i--) {
+		p[0]=back;
+		p[1]=back;
+		p[2]=back;
+		p[3]=back;
+		p[4]=back;
+		p[5]=back;
+		p[6]=back;
+		p[7]=back;
+		p+=8;
+	}
 }
 
 
@@ -358,30 +375,17 @@ bool8 S9xGraphicsInit ()
 
     GFX.RealPitch = GFX.Pitch2 = GFX.Pitch;
     GFX.ZPitch = GFX.Pitch;
-    if (Settings.SixteenBit)
 	GFX.ZPitch >>= 1;
     GFX.Delta = (GFX.SubScreen - GFX.Screen) >> 1;
     GFX.DepthDelta = GFX.SubZBuffer - GFX.ZBuffer;
-    //GFX.InfoStringTimeout = 0;
-    //GFX.InfoString = NULL;
 
     PPU.BG_Forced = 0;
     IPPU.OBJChanged = TRUE;
-    if (Settings.Transparency)
-	Settings.SixteenBit = TRUE;
 
     IPPU.DirectColourMapsNeedRebuild = TRUE;
-    GFX.PixSize = 1;
-    if (Settings.SixteenBit)
-    {
+//    GFX.PixSize = 1;
 	GFX.PPL = GFX.Pitch >> 1;
 	GFX.PPLx2 = GFX.Pitch;
-    }
-    else
-    {
-	GFX.PPL = GFX.Pitch;
-	GFX.PPLx2 = GFX.Pitch * 2;
-    }
     S9xFixColourBrightness ();
 
 #ifdef _TRANSP_SUPPORT_
@@ -581,9 +585,6 @@ void S9xBuildDirectColourMaps ()
 
 void S9xStartScreenRefresh ()
 {
-    if (GFX.InfoStringTimeout > 0 && --GFX.InfoStringTimeout == 0)
-	GFX.InfoString = NULL;
-
     if (IPPU.RenderThisFrame)
     {
 	if (!S9xInitUpdate ())
@@ -597,6 +598,8 @@ void S9xStartScreenRefresh ()
 	IPPU.LatchedBlanking = PPU.ForcedBlanking;
 	IPPU.LatchedInterlace = (FillRAM[0x2133] & 1);
 //	IPPU.Interlace = (FillRAM[0x2133] & 1);
+#if 0
+// snesTYL is not support hires
 	if (Settings.SupportHiRes && (PPU.BGMode == 5 || PPU.BGMode == 6 ||
 				      IPPU.LatchedInterlace/*IPPU.Interlace*/))
 	{
@@ -610,39 +613,26 @@ void S9xStartScreenRefresh ()
 		IPPU.RenderedScreenHeight = PPU.ScreenHeight << 1;
 		GFX.Pitch2 = GFX.RealPitch;
 		GFX.Pitch = GFX.RealPitch * 2;
-		if (Settings.SixteenBit)
-		    GFX.PPL = GFX.PPLx2 = GFX.RealPitch;
-		else
-		    GFX.PPL = GFX.PPLx2 = GFX.RealPitch << 1;
+	    GFX.PPL = GFX.PPLx2 = GFX.RealPitch;
 	    }
 	    else
 	    {
 		IPPU.RenderedScreenHeight = PPU.ScreenHeight;
 		GFX.Pitch2 = GFX.Pitch = GFX.RealPitch;
-		if (Settings.SixteenBit)
-		    GFX.PPL = GFX.Pitch >> 1;
-		else
-		    GFX.PPL = GFX.Pitch;
+	    GFX.PPL = GFX.Pitch >> 1;
 		GFX.PPLx2 = GFX.PPL << 1;
 	    }
-#if defined(USE_GLIDE) || defined(USE_OPENGL)
-	    GFX.ZPitch = GFX.RealPitch;
-	    if (Settings.SixteenBit)
-		GFX.ZPitch >>= 1;
-#endif
 	}
 	else
+#endif
 	{
 	    IPPU.RenderedScreenWidth = 256;
 	    IPPU.RenderedScreenHeight = PPU.ScreenHeight;
 	    IPPU.DoubleWidthPixels = FALSE;
-	    {
 		GFX.Pitch2 = GFX.Pitch = GFX.RealPitch;
 		GFX.PPL = GFX.PPLx2 >> 1;
 		GFX.ZPitch = GFX.RealPitch;
-		if (Settings.SixteenBit)
-		    GFX.ZPitch >>= 1;
-	    }                        
+	    GFX.ZPitch >>= 1;
 	}
 	PPU.RecomputeClipWindows = TRUE;
 	GFX.DepthDelta = GFX.SubZBuffer - GFX.ZBuffer;
@@ -657,51 +647,10 @@ void S9xStartScreenRefresh ()
 
 }
 
-extern void DrawBGMode7BackgroundNew (uint8 *Screen, int bg, int pitch);
-extern void DrawBGMode7BackgroundPrioNew (uint8 *Screen, int bg,int prio,int pitch);
-extern void DrawBGMode7Background16New (uint16 *Screen, int bg,int pitch);
-extern void DrawBGMode7Background16PrioNew (uint16 *Screen, int bg, int prio,int pitch);
+extern void DrawBGMode7Background16New (uint16 *Screen, int bg);
+extern void DrawBGMode7Background16PrioNew (uint16 *Screen, int bg, int prio);
 
 
-
-/*void RenderLine (uint8 C)
-{
-    if (IPPU.RenderThisFrame)
-    {
-	LineData[C].BG[0].VOffset = PPU.BG[0].VOffset + 1;
-	LineData[C].BG[0].HOffset = PPU.BG[0].HOffset;
-	LineData[C].BG[1].VOffset = PPU.BG[1].VOffset + 1;
-	LineData[C].BG[1].HOffset = PPU.BG[1].HOffset;
-
-	if (PPU.BGMode == 7)
-	{
-	    struct SLineMatrixData *p = &LineMatrixData [C];
-	    p->MatrixA = PPU.MatrixA;
-	    p->MatrixB = PPU.MatrixB;
-	    p->MatrixC = PPU.MatrixC;
-	    p->MatrixD = PPU.MatrixD;
-	    p->CentreX = PPU.CentreX;
-	    p->CentreY = PPU.CentreY;
-	}
-	else
-	{
-	    if (Settings.StarfoxHack && PPU.BG[2].VOffset == 0 &&
-		PPU.BG[2].HOffset == 0xe000)
-	    {
-		LineData[C].BG[2].VOffset = 0xe1;
-		LineData[C].BG[2].HOffset = 0;
-	    }
-	    else
-	    {
-		LineData[C].BG[2].VOffset = PPU.BG[2].VOffset + 1;
-		LineData[C].BG[2].HOffset = PPU.BG[2].HOffset;
-		LineData[C].BG[3].VOffset = PPU.BG[3].VOffset + 1;
-		LineData[C].BG[3].HOffset = PPU.BG[3].HOffset;
-	    }
-	}
-	IPPU.CurrentLine = C + 1;
-    }
-}*/
 
 void S9xEndScreenRefresh ()
 {
@@ -712,72 +661,44 @@ void S9xEndScreenRefresh ()
 	FLUSH_REDRAW ();
 	if (IPPU.ColorsChanged)
 	{
-	    uint32 saved = PPU.CGDATA[0];
-	    if (!Settings.SixteenBit)
-	    {
-		// Hack for Super Mario World - to get its sky blue
-		// (It uses Fixed colour addition on the backdrop colour)
-#ifdef SMW_HACK		
-		if (!(FillRAM [0x2131] & 0x80) &&
-		    (FillRAM[0x2131] & 0x20) &&
-		    (PPU.FixedColourRed || PPU.FixedColourGreen ||
-		     PPU.FixedColourBlue))
-		{
-		    PPU.CGDATA[0] = PPU.FixedColourRed||(PPU.FixedColourGreen<<5)||(PPU.FixedColourBlue<<10);
-		}
-#endif		
-	    }
 	    IPPU.ColorsChanged = FALSE;
 	    S9xSetPalette ();
-	    PPU.CGDATA[0] = saved;
 	}
-            GFX.Pitch = GFX.Pitch2 = GFX.RealPitch;
-            GFX.PPL = GFX.PPLx2 >> 1;
+    GFX.Pitch = GFX.Pitch2 = GFX.RealPitch;
+    GFX.PPL = GFX.PPLx2 >> 1;
         
 
-/*	if (Settings.DisplayFrameRate)
-	    S9xDisplayFrameRate ();
-	if (GFX.InfoString)
-	    S9xDisplayString (GFX.InfoString);*/
-
 	S9xDeinitUpdate (IPPU.RenderedScreenWidth, IPPU.RenderedScreenHeight,
-			 Settings.SixteenBit);
+			 TRUE/*Settings.SixteenBit*/);
     }
 //    S9xApplyCheats ();
 #ifdef DEBUGGER
-    if (CPU.Flags & FRAME_ADVANCE_FLAG)
+    if (CPUPack.CPU.Flags & FRAME_ADVANCE_FLAG)
     {
-	if (ICPU.FrameAdvanceCount)
+	if (CPUPack.ICPU.FrameAdvanceCount)
 	{
-	    ICPU.FrameAdvanceCount--;
+	    CPUPack.ICPU.FrameAdvanceCount--;
 	    IPPU.RenderThisFrame = TRUE;
 	    IPPU.FrameSkip = 0;
 	}
 	else
 	{
-	    CPU.Flags &= ~FRAME_ADVANCE_FLAG;
-	    CPU.Flags |= DEBUG_MODE_FLAG;
+	    CPUPack.CPU.Flags &= ~FRAME_ADVANCE_FLAG;
+	    CPUPack.CPU.Flags |= DEBUG_MODE_FLAG;
 	}
     }
 #endif
-    if (CPU.SRAMModified) {
-			if (!CPU.AutoSaveTimer) {
-	    	if (!(CPU.AutoSaveTimer = Settings.AutoSaveDelay * Memory.ROMFramesPerSecond)) CPU.SRAMModified = FALSE;
+    if (CPUPack.CPU.SRAMModified) {
+			if (!CPUPack.CPU.AutoSaveTimer) {
+	    	if (!(CPUPack.CPU.AutoSaveTimer = Settings.AutoSaveDelay * Memory.ROMFramesPerSecond)) CPUPack.CPU.SRAMModified = FALSE;
 			} else {
-	    	if (!--CPU.AutoSaveTimer) {
+	    	if (!--CPUPack.CPU.AutoSaveTimer) {
 					S9xAutoSaveSRAM ();
-					CPU.SRAMModified = FALSE;
+					CPUPack.CPU.SRAMModified = FALSE;
 	    	}
 			}
     }
 }
-
-void S9xSetInfoString (const char *string)
-{
-    GFX.InfoString = string;
-    GFX.InfoStringTimeout = 120;
-}
-
 
 
 void S9xSetupOBJ ()
@@ -1256,7 +1177,7 @@ void DrawBackgroundOffsetNew (uint32 BGMode, uint32 bg, uint32 prio)
     int OffsetShift;
     int OffsetEnableMask = 1 << (bg + 13);
 
-    if (BG.TileSize == 16)
+    if (BG.TileSizeIs16)
     {
 		OffsetMask = 0x3ff;
 		OffsetShift = 4;
@@ -1409,7 +1330,7 @@ void DrawBackgroundOffsetNew (uint32 BGMode, uint32 bg, uint32 prio)
 
 		Quot = HPos >> 3;
 
-		if (BG.TileSize == 8)
+		if (!BG.TileSizeIs16)
 		{
 		    if (Quot > 31)
 			t = b2 + (Quot & 0x1f);
@@ -1439,7 +1360,7 @@ void DrawBackgroundOffsetNew (uint32 BGMode, uint32 bg, uint32 prio)
 
 		if (((Tile&0x2000)>>13)==prio)
 		{
-			if (BG.TileSize == 8)
+			if (!BG.TileSizeIs16)
 			     ptrDrawClippedTileNew (Tile, sGP32, Offset, Count, VirtAlign, Lines);
 			else
 			{
@@ -1516,7 +1437,7 @@ void DrawBackgroundMode5New (uint32 /* BGMODE */, uint32 bg, uint32 prio)
     int VOffsetMask;
     int VOffsetShift;
 
-    if (BG.TileSize == 16)
+    if (BG.TileSizeIs16)
     {
 	VOffsetMask = 0x3ff;
 	VOffsetShift = 4;
@@ -1620,7 +1541,7 @@ void DrawBackgroundMode5New (uint32 /* BGMODE */, uint32 bg, uint32 prio)
 
 			if (((Tile & 0x2000) >> 13)==prio)
 			{
-				if (BG.TileSize == 8)
+				if (!BG.TileSizeIs16)
 				{
 				    if (!(Tile & H_FLIP))
 				    {
@@ -1681,7 +1602,7 @@ void DrawBackgroundMode5New (uint32 /* BGMODE */, uint32 bg, uint32 prio)
 			//GFX.Z1 = GFX.Z2 = depths [(Tile & 0x2000) >> 13];
 			if (((Tile & 0x2000) >> 13)==prio)
 			{
-				if (BG.TileSize == 8)
+				if (!BG.TileSizeIs16)
 				{
 				    if (!(Tile & H_FLIP))
 				    {
@@ -1738,7 +1659,7 @@ void DrawBackgroundMode5New (uint32 /* BGMODE */, uint32 bg, uint32 prio)
 //			GFX.Z1 = GFX.Z2 = depths [(Tile & 0x2000) >> 13];
 			if (((Tile & 0x2000) >> 13)==prio)
 			{
-				if (BG.TileSize == 8)
+				if (!BG.TileSizeIs16)
 				{
 				    if (!(Tile & H_FLIP))
 				    {
@@ -1789,7 +1710,7 @@ void DrawBackgroundMode5New (uint32 /* BGMODE */, uint32 bg, uint32 prio)
 
 void DrawBackgroundNew (uint32 BGMode, uint32 bg, uint32 prio)
 {
-    BG.TileSize = BGSizes [PPU.BG[bg].BGSize];
+    BG.TileSizeIs16 = PPU.BG[bg].BGSize;
     BG.BitShift = BitShifts[BGMode][bg];
     BG.TileShift = TileShifts[BGMode][bg];
     BG.TileAddress = PPU.BG[bg].NameBase << 1;
@@ -1872,7 +1793,7 @@ void DrawBackgroundNew (uint32 BGMode, uint32 bg, uint32 prio)
     int OffsetMask;
     int OffsetShift;
 
-    if (BG.TileSize == 16)
+    if (BG.TileSizeIs16)
     {
 	OffsetMask = 0x3ff;
 	OffsetShift = 4;
@@ -1952,7 +1873,7 @@ void DrawBackgroundNew (uint32 BGMode, uint32 bg, uint32 prio)
 	    uint32 Count = 0;
 
 	    uint16 *t;
-	    if (BG.TileSize == 8)
+	    if (!BG.TileSizeIs16)
 	    {
 		if (Quot > 31)
 		    t = b2 + (Quot & 0x1f);
@@ -1981,7 +1902,7 @@ void DrawBackgroundNew (uint32 BGMode, uint32 bg, uint32 prio)
 
 		if (((Tile & 0x2000) >> 13)==prio)
 		{
-			if (BG.TileSize == 8)
+			if (!BG.TileSizeIs16)
 			{
 				    ptrDrawClippedTileNew(Tile, sGP32, Offset, Count, VirtAlign,Lines);
 			}
@@ -2015,7 +1936,7 @@ void DrawBackgroundNew (uint32 BGMode, uint32 bg, uint32 prio)
 
 		}
 
-		if (BG.TileSize == 8)
+		if (!BG.TileSizeIs16)
 		{
 		    t++;
 		    if (Quot == 31)
@@ -2046,7 +1967,7 @@ void DrawBackgroundNew (uint32 BGMode, uint32 bg, uint32 prio)
 
 		if (((Tile & 0x2000) >> 13)==prio)
 		{
-		if (BG.TileSize != 8)
+		if (BG.TileSizeIs16)
 		{
 		    if (Tile & H_FLIP)
 		    {
@@ -2084,7 +2005,7 @@ void DrawBackgroundNew (uint32 BGMode, uint32 bg, uint32 prio)
 		}
 
 
-		if (BG.TileSize == 8)
+		if (!BG.TileSizeIs16)
 		{
 		    t++;
 		    if (Quot == 31)
@@ -2110,7 +2031,7 @@ void DrawBackgroundNew (uint32 BGMode, uint32 bg, uint32 prio)
 //		GFX.Z1 = GFX.Z2 = depths [(Tile & 0x2000) >> 13];
 		if (((Tile & 0x2000) >> 13)==prio)
 		{
-		if (BG.TileSize == 8)
+		if (!BG.TileSizeIs16)
 		    ptrDrawClippedTileNew (Tile, sGP32, 0, Count, VirtAlign,
 					   Lines);
 		else
@@ -2191,101 +2112,6 @@ HIGH_BITS_SHIFTED_TWO_MASK = (( (FIRST_COLOR_MASK | SECOND_COLOR_MASK | THIRD_CO
                                 ~TWO_LOW_BITS_MASK ) >> 2);
 
 
-
-/*#include "font.h"
-
-void DisplayChar (uint8 *Screen, uint8 c)
-{
-    int line = (((c & 0x7f) - 32) >> 4) * font_height;
-    int offset = (((c & 0x7f) - 32) & 15) * font_width;
-    if (Settings.SixteenBit)
-    {
-	int h, w;
-	uint16 *s = (uint16 *) Screen;
-	for (h = 0; h < font_height; h++, line++,
-	     s += GFX.PPL - font_width)
-	{
-	    for (w = 0; w < font_width; w++, s++)
-	    {
-		uint8 p = font [line][offset + w];
-
-		if (p == '#')
-		    *s = 0xffff;
-		else
-		if (p == '.')
-		    *s = BLACK;
-	    }
-	}
-    }
-    else
-    {
-	int h, w;
-	uint8 *s = Screen;
-	for (h = 0; h < font_height; h++, line++,
-	     s += GFX.PPL - font_width)
-	{
-	    for (w = 0; w < font_width; w++, s++)
-	    {
-		uint8 p = font [line][offset + w];
-
-		if (p == '#')
-		    *s = 255;
-		else
-		if (p == '.')
-		    *s = BLACK;
-	    }
-	}
-    }
-}
-
-static void S9xDisplayFrameRate ()
-{
-    uint8 *Screen = GFX.Screen + 2 +
-		    (IPPU.RenderedScreenHeight - font_height - 1) * GFX.Pitch2;
-    char string [10];
-    int len = 5;
-
-    sprintf (string, "%02d/%02d", IPPU.DisplayedRenderedFrameCount,
-	     (int) Memory.ROMFramesPerSecond);
-
-    int i;
-    for (i = 0; i < len; i++)
-    {
-	DisplayChar (Screen, string [i]);
-	Screen += Settings.SixteenBit ? (font_width - 1) * sizeof (uint16) : 
-		  (font_width - 1);
-    }
-}
-
-static void S9xDisplayString (const char *string)
-{
-    uint8 *Screen = GFX.Screen + 2 +
-		    (IPPU.RenderedScreenHeight - font_height * 5) * GFX.Pitch2;
-    int len = strlen (string);
-    int max_chars = IPPU.RenderedScreenWidth / (font_width - 1);
-    int char_count = 0;
-    int i;
-
-    for (i = 0; i < len; i++, char_count++)
-    {
-	if (char_count >= max_chars || string [i] < 32)
-	{
-	    Screen -= Settings.SixteenBit ? 
-			(font_width - 1) * sizeof (uint16) * max_chars :
-			(font_width - 1) * max_chars;
-	    Screen += font_height * GFX.Pitch;
-	    if (Screen >= GFX.Screen + GFX.Pitch * IPPU.RenderedScreenHeight)
-		break;
-	    char_count -= max_chars;
-	}
-	if (string [i] < 32)
-	    continue;
-	DisplayChar (Screen, string [i]);
-	Screen += Settings.SixteenBit ? (font_width - 1) * sizeof (uint16) : 
-		  (font_width - 1);
-    }
-}
-*/
 
 #ifdef GFX_MULTI_FORMAT
 
@@ -2402,7 +2228,14 @@ void S9xUpdateScreen (){
   if (starty>endy) return;  	  
   	
   if (os9x_softrendering==1) {
+		// software rendering. so cache on!
+		GFX.Screen = (uint8*)CACHE_ON(GFX.Screen);
+		GFX.S = GFX.Screen;
+		GFX.Delta = (GFX.SubScreen - GFX.Screen) >> 1;
 		orgS9xUpdateScreen();
+		// put back cache off and writeback Dcache
+		GFX.Screen = (uint8*)CACHE_OFF(GFX.Screen);
+		sceKernelDcacheWritebackInvalidateAll();
 		return;
   }
   if (os9x_softrendering==2) {
@@ -2416,6 +2249,10 @@ void S9xUpdateScreen (){
 			(PPU.BGMode!=7)) {							//mode 7
 			pspS9xUpdateScreen();			
 		}	else {						
+			// software rendering. so cache on!
+			GFX.Screen = (uint8*)CACHE_ON(GFX.Screen);
+			GFX.S = GFX.Screen;
+			GFX.Delta = (GFX.SubScreen - GFX.Screen) >> 1;
 			orgS9xUpdateScreen();
 			u32 *src,*dst;
 			src=(u32*)(GFX.Screen+starty*GFX.Pitch2);
@@ -2423,10 +2260,13 @@ void S9xUpdateScreen (){
 				dst=(u32*)(0x44000000+512*2*(272*swap_buf+starty ));
 				for (int y=endy-starty+1;y;y--,dst+=256/2) __memcpy4a((long unsigned int*)dst,(long unsigned int*)src,256*2/4);				
 			} else*/ {
-				dst=(u32*)(0x44000000+512*272*2*2+256*240*2+2*256*256*2+starty*256*2 );
+				dst=(u32*)(0x04000000+512*272*2*2+256*240*2+2*256*256*2+starty*256*2 );
 				for (int y=endy-starty+1;y;y--) __memcpy4a((long unsigned int*)dst,(long unsigned int*)src,256*2/4);				
 				
 			}
+			// put back cache off and writeback Dcache
+			GFX.Screen = (uint8*)CACHE_OFF(GFX.Screen);
+			sceKernelDcacheWritebackInvalidateAll();
 		}
 		return;
   }
@@ -2440,7 +2280,9 @@ void S9xUpdateScreen (){
 		}	else {						//go for fast software mode, so continue & update at the end
 		}	
   }
-    
+    // software rendering. so cache on!
+	GFX.Screen = (uint8*)CACHE_ON(GFX.Screen);
+	GFX.S = GFX.Screen;
     
     os9x_SetTileRender(0);
     
@@ -2657,27 +2499,21 @@ PROF_END(11);
 			    {
 			    	
 			    	info(32,11,"mode 7 ext");
-					GFX.Mode7Mask = 0x7f;
-					GFX.Mode7PriorityMask = 0x80;
-					bg = 1;
+					//GFX.Mode7Mask = 0x7f;
+					//GFX.Mode7PriorityMask = 0x80;
+					//bg = 1;
 					
-					int pitch;
-					/*if (os9x_softrendering)*/ pitch=256;
+					//int pitch;
+					/*if (os9x_softrendering)*/// pitch=256;
 //					else pitch=320;
 
-					if (!Settings.SixteenBit)
-						DrawBGMode7BackgroundPrioNew (GFX.Screen, bg,0,pitch);
-				    else			    
-				    	DrawBGMode7Background16PrioNew ((uint16*)GFX.Screen, bg,0,pitch);
+			    	DrawBGMode7Background16PrioNew ((uint16*)GFX.Screen, 1,0);
 
 			    	FIXCLIP(4);	    	
 					if (!os9x_fastsprite) DrawOBJSNew (1);
 				    else DrawOBJSFastNew(1);
 					
-					if (!Settings.SixteenBit)
-						DrawBGMode7BackgroundPrioNew (GFX.Screen, bg,1,pitch);
-				    else			    
-				    	DrawBGMode7Background16PrioNew ((uint16*)GFX.Screen, bg,1,pitch);
+			    	DrawBGMode7Background16PrioNew ((uint16*)GFX.Screen, 1,1);
 										
 					FIXCLIP(4);	    	
 					if (!os9x_fastsprite) DrawOBJSNew (2);
@@ -2689,18 +2525,15 @@ PROF_END(11);
 			    else
 			    {
 			    	info(32,11,"mode 7 norm");
-					GFX.Mode7Mask = 0xff;
-					GFX.Mode7PriorityMask = 0;
-					bg = 0;
+					//GFX.Mode7Mask = 0xff;
+					//GFX.Mode7PriorityMask = 0;
+					//bg = 0;
 					
-					int pitch;
-					/*if (os9x_softrendering)*/ pitch=256;
+					//int pitch;
+					/*if (os9x_softrendering)*/// pitch=256;
 					//else pitch=320;
 					
-					if (!Settings.SixteenBit)
-						DrawBGMode7BackgroundNew (GFX.Screen, bg,pitch);
-				    else			    
-				    	DrawBGMode7Background16New ((uint16*)GFX.Screen, bg,pitch);
+			    	DrawBGMode7Background16New ((uint16*)GFX.Screen, 0);
 				    	
 				    if (OB)
 					{
@@ -2873,27 +2706,21 @@ PROF_END(11);
 			    if (OB&&(FillRAM [0x2133] & 0x40))
 			    {
 			    	info(32,11,"mode 7 ext");
-					GFX.Mode7Mask = 0x7f;
-					GFX.Mode7PriorityMask = 0x80;
-					bg = 1;
+					//GFX.Mode7Mask = 0x7f;
+					//GFX.Mode7PriorityMask = 0x80;
+					//bg = 1;
 					
-					int pitch;
-					/*if (os9x_softrendering)*/ pitch=256;
+					//int pitch;
+					/*if (os9x_softrendering)*/ //pitch=256;
 					//else pitch=320;
 
-					if (!Settings.SixteenBit)
-						DrawBGMode7BackgroundPrioNew (GFX.Screen, bg,0,pitch);
-				    else			    
-				    	DrawBGMode7Background16PrioNew ((uint16*)GFX.Screen, bg,0,pitch);
+			    	DrawBGMode7Background16PrioNew ((uint16*)GFX.Screen, 1,0);
 
 			    	FIXCLIP(4);	    	
 					if (!os9x_fastsprite) DrawOBJSNew (1);
 				    else DrawOBJSFastNew(1);
 					
-					if (!Settings.SixteenBit)
-						DrawBGMode7BackgroundPrioNew (GFX.Screen, bg,1,pitch);
-				    else			    
-				    	DrawBGMode7Background16PrioNew ((uint16*)GFX.Screen, bg,1,pitch);
+			    	DrawBGMode7Background16PrioNew ((uint16*)GFX.Screen, 1,1);
 										
 					FIXCLIP(4);	    	
 					if (!os9x_fastsprite) DrawOBJSNew (2);
@@ -2905,12 +2732,12 @@ PROF_END(11);
 			    else
 			    {
 			    	info(32,11,"mode 7 norm");
-					GFX.Mode7Mask = 0xff;
-					GFX.Mode7PriorityMask = 0;
-					bg = 0;
+					//GFX.Mode7Mask = 0xff;
+					//GFX.Mode7PriorityMask = 0;
+					//bg = 0;
 					
-					int pitch;
-					/*if (os9x_softrendering)*/ pitch=256;
+					//int pitch;
+					/*if (os9x_softrendering)*/ //pitch=256;
 					//else pitch=320;
 					
 					/*int x;
@@ -2920,8 +2747,7 @@ PROF_END(11);
 					}*/
 					
 					
-					if (!Settings.SixteenBit) DrawBGMode7BackgroundNew (GFX.Screen, bg,pitch);
-				  else DrawBGMode7Background16New ((uint16*)GFX.Screen, bg,pitch);
+					DrawBGMode7Background16New ((uint16*)GFX.Screen, 0);
 				  
 				    	
 				    if (OB)
@@ -2978,12 +2804,13 @@ PROF_END(11);
 				dst=(u32*)(0x44000000+512*2*(272*swap_buf+starty ));
 				for (int y=endy-starty+1;y;y--,dst+=256/2) __memcpy4a((long unsigned int*)dst,(long unsigned int*)src,256*2/4);				
 			} else*/ {
-				dst=(u32*)(0x44000000+512*272*2*2+256*240*2+2*256*256*2+starty*256*2 );
+				dst=(u32*)(0x04000000+512*272*2*2+256*240*2+2*256*256*2+starty*256*2 );
 				for (int y=endy-starty+1;y;y--) __memcpy4a((long unsigned int*)dst,(long unsigned int*)src,256*2/4);				
 			}
 	}
-	
-	
+	// put back cache off and writeback Dcache
+	GFX.Screen = (uint8*)CACHE_OFF(GFX.Screen);
+	sceKernelDcacheWritebackInvalidateAll();
 			
 #ifdef PROFILING
 	PROF_END(8);

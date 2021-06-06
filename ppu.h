@@ -91,9 +91,9 @@ struct InternalPPU {
     bool8  DoubleWidthPixels;
     int    RenderedScreenHeight;
     int    RenderedScreenWidth;
-    uint32 Red [256];
-    uint32 Green [256];
-    uint32 Blue [256];
+    uint8 Red [256];
+    uint8 Green [256];
+    uint8 Blue [256];
     uint8  *XB;
     uint16 ScreenColors [256];
     int	   PreviousLine;
@@ -135,8 +135,14 @@ struct SPPU {
 
     struct {
 	uint16 SCBase;
-	uint16 VOffset;
-	uint16 HOffset;
+	union {
+		uint16 VOffset;
+		uint8 VOffset_Byte[2];
+	};
+	union {
+		uint16 HOffset;
+		uint8 HOffset_Byte[2];
+	};
 	uint8 BGSize;
 	uint16 NameBase;
 	uint16 SCSize;
@@ -161,12 +167,30 @@ struct SPPU {
     uint8  VBeamFlip;
     uint8  HVBeamCounterLatched;
 
-    short  MatrixA;
-    short  MatrixB;
-    short  MatrixC;
-    short  MatrixD;
-    short  CentreX;
-    short  CentreY;
+	union {
+		short  MatrixA;
+		uint8  MatrixA_Byte[2];
+	};
+	union {
+		short  MatrixB;
+		uint8  MatrixB_Byte[2];
+	};
+	union {
+		short  MatrixC;
+		uint8  MatrixC_Byte[2];
+	};
+	union {
+		short  MatrixD;
+		uint8  MatrixD_Byte[2];
+	};
+	union {
+		short  CentreX;
+		uint8  CentreX_Byte[2];
+	};
+	union {
+		short  CentreY;
+		uint8  CentreY_Byte[2];
+	};
     uint8  Joypad1ButtonReadPos;
     uint8  Joypad2ButtonReadPos;
 
@@ -217,23 +241,32 @@ struct SPPU {
 #define CLIP_XOR 2
 #define CLIP_XNOR 3
 
+#ifdef LSB_FIRST
+ #define LOWBYTE 0
+ #define HIGHBYTE 1
+#else
+ 1#define LOWBYTE 1
+ #define HIGHBYTE 0
+#endif
+
+
 struct SDMA {
     bool8  TransferDirection;
     bool8  AAddressFixed;
     bool8  AAddressDecrement;
     uint8  TransferMode;
 
+	uint16 AAddress;
+	uint16 Address;
     uint8  ABank;
-    uint16 AAddress;
-    uint16 Address;
     uint8  BAddress;
 
     // General DMA only:
-    uint16 TransferBytes;
+	uint16 TransferBytes;
 
     // H-DMA only:
     bool8  HDMAIndirectAddressing;
-    uint16 IndirectAddress;
+	uint16 IndirectAddress;
     uint8  IndirectBank;
     uint8  Repeat;
     uint8  LineCount;
@@ -273,13 +306,13 @@ END_EXTERN_C
 
 STATIC inline uint8 REGISTER_4212()
 {
-    GetBank = 0;
-    if (CPU.V_Counter >= PPU.ScreenHeight + FIRST_VISIBLE_LINE &&
-	CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE + 3)
+    uint8 GetBank = 0;
+    if (CPUPack.CPU.V_Counter >= PPU.ScreenHeight + FIRST_VISIBLE_LINE &&
+	CPUPack.CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE + 3)
 	GetBank = 1;
 
-    GetBank |= CPU.Cycles >= Settings.HBlankStart ? 0x40 : 0;
-    if (CPU.V_Counter >= PPU.ScreenHeight + FIRST_VISIBLE_LINE)
+    GetBank |= CPUPack.CPU.Cycles >= Settings.HBlankStart ? 0x40 : 0;
+    if (CPUPack.CPU.V_Counter >= PPU.ScreenHeight + FIRST_VISIBLE_LINE)
 	GetBank |= 0x80; /* XXX: 0x80 or 0xc0 ? */
 
     return (GetBank);
@@ -392,7 +425,7 @@ STATIC inline void REGISTER_2118 (uint8 Byte)
     if (!PPU.VMA.High)
     {
 #ifdef DEBUGGER
-	if (Settings.TraceVRAM && !CPU.InDMA)
+	if (Settings.TraceVRAM && !CPUPack.CPU.InDMA)
 	{
 	    printf ("VRAM write byte: $%04X (%d,%d)\n", PPU.VMA.Address,
 		    FillRAM[0x2115] & 3,
@@ -468,7 +501,7 @@ STATIC inline void REGISTER_2119 (uint8 Byte)
     if (PPU.VMA.High)
     {
 #ifdef DEBUGGER
-	if (Settings.TraceVRAM && !CPU.InDMA)
+	if (Settings.TraceVRAM && !CPUPack.CPU.InDMA)
 	{
 	    printf ("VRAM write word: $%04X (%d,%d)\n", PPU.VMA.Address,
 		    FillRAM[0x2115] & 3,
@@ -524,22 +557,19 @@ STATIC inline void REGISTER_2122(uint8 Byte)
     {    	
 	if ((Byte & 0x7f) != (PPU.CGDATA[PPU.CGADD] >> 8))
 	{
-	    if (Settings.SixteenBit&& !(os9x_hack&PPU_IGNORE_PALWRITE)){
+	    if (!(os9x_hack&PPU_IGNORE_PALWRITE)){
 	    	INFO_FLUSH_REDRAW("2122flip");
 				FLUSH_REDRAW ();
 			}
 	    PPU.CGDATA[PPU.CGADD] &= 0x00FF;
 	    PPU.CGDATA[PPU.CGADD] |= (Byte & 0x7f) << 8;
 	    IPPU.ColorsChanged = TRUE;
-	    if (Settings.SixteenBit)
-	    {
 		IPPU.Blue [PPU.CGADD] = IPPU.XB [(Byte >> 2) & 0x1f];
 		IPPU.Green [PPU.CGADD] = IPPU.XB [(PPU.CGDATA[PPU.CGADD] >> 5) & 0x1f];
 		IPPU.ScreenColors [PPU.CGADD] = (uint16) BUILD_PIXEL (IPPU.Red [PPU.CGADD],
 							     IPPU.Green [PPU.CGADD],
 							     IPPU.Blue [PPU.CGADD]);
 		os9x_ColorsChanged=1;							     
-	    }	  
 	}
 	PPU.CGADD++;
     }
@@ -547,22 +577,19 @@ STATIC inline void REGISTER_2122(uint8 Byte)
     {
 	if (Byte != (uint8) (PPU.CGDATA[PPU.CGADD] & 0xff))
 	{
-	    if (Settings.SixteenBit&& !(os9x_hack&PPU_IGNORE_PALWRITE)){
+	    if (!(os9x_hack&PPU_IGNORE_PALWRITE)){
 	    	INFO_FLUSH_REDRAW("2122dif");
 				FLUSH_REDRAW ();
 			}
 	    PPU.CGDATA[PPU.CGADD] &= 0x7F00;
 	    PPU.CGDATA[PPU.CGADD] |= Byte;
 	    IPPU.ColorsChanged = TRUE;
-	    if (Settings.SixteenBit)
-	    {
 		IPPU.Red [PPU.CGADD] = IPPU.XB [Byte & 0x1f];
 		IPPU.Green [PPU.CGADD] = IPPU.XB [(PPU.CGDATA[PPU.CGADD] >> 5) & 0x1f];
 		IPPU.ScreenColors [PPU.CGADD] = (uint16) BUILD_PIXEL (IPPU.Red [PPU.CGADD],
 							     IPPU.Green [PPU.CGADD],
 							     IPPU.Blue [PPU.CGADD]);
 		os9x_ColorsChanged=1;							 
-	    }	 
 	}
     }
     PPU.CGFLIP ^= 1;

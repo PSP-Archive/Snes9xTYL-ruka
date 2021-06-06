@@ -177,46 +177,45 @@ enum {
 #define MEMMAP_NUM_BLOCKS (0x1000000 / MEMMAP_BLOCK_SIZE)
 
 struct SCPUState{
-    uint32  Flags;					//0
-    bool8   BranchSkip;				//4
-    bool8   NMIActive;				//5
-    bool8   IRQActive;				//6
-    bool8   WaitingForInterrupt;	//7
-    bool8   InDMA;					//8
-    uint8   WhichEvent;				//9
-	bool8  SRAMModified;			//10
-	bool8  BRKTriggered;			//11
-    uint8   *PC;					//12
-    uint8   *PCBase;				//16
-    uint8   *PCAtOpcodeStart;		//20
-    uint8   *WaitAddress;			//24
-    uint32  WaitCounter;			//28
-    int32   Cycles;					//32
-    int32   NextEvent;				//36
-    int32   V_Counter;				//40
-    int32   MemSpeed;				//44
-    int32   MemSpeedx2;				//48
-	int32   FastROMSpeed;			//52
-    uint32 AutoSaveTimer;    		//56
-    uint32 NMITriggerPoint;    		//60
-    uint32 NMICycleCount;			//64
-    uint32 IRQCycleCount;			//68
-    struct SRegisters Regs;			//72
-    uint32	_ARM_asm_reserved_1;	//88  to stock current jmp table
-    bool8  TriedInterleavedMode2;	//92
-    bool8  _ARM_asm_padding1[3];	//93
+    uint32  Flags;
+    bool8   BranchSkip;			
+    bool8   NMIActive;
+    bool8   IRQActive;
+    bool8   WaitingForInterrupt;
+    bool8   InDMA;
+    uint8   WhichEvent;
+	bool8  SRAMModified;
+	bool8  BRKTriggered;
+    uint8   *PC;
+    uint8   *PCBase;
+    uint8   *PCAtOpcodeStart;
+    uint8   *WaitAddress;
+    uint32  WaitCounter;
+    int32   Cycles;
+    int32   NextEvent;
+    int32   V_Counter;
+    int32   MemSpeed;
+    int32   MemSpeedx2;
+	int32   FastROMSpeed;
+    uint32 AutoSaveTimer;
+    uint8 NMITriggerPoint;
+    uint8 NMICycleCount;
+    uint8 IRQCycleCount;
+    bool8  TriedInterleavedMode2;
+//    struct SRegisters Regs;
+//    uint32	_ARM_asm_reserved_1;	//88  to stock current jmp table
+//    bool8  _ARM_asm_padding1[3];	//93
     
-    uint8*	Memory_Map;				//96
-    uint8*	Memory_WriteMap;		//100
-    uint8*	Memory_MemorySpeed;		//104
-    uint8*	Memory_BlockIsRAM;		//108
-    uint8*	Memory_SRAM;			//112
-    uint8*	Memory_BWRAM;			//116
-    uint16	Memory_SRAMMask;		//120
-    bool8	APU_APUExecuting;		//122
-    bool8	_ARM_asm_padding2;		//123
-    uint32	_PALMSOS_R9;			//124
-    uint32	_PALMSOS_R10;    		//128
+    uint8*	Memory_Map;
+    uint8*	Memory_WriteMap;
+    uint8*	Memory_MemorySpeed;
+    uint8*	Memory_BlockIsRAM;
+//    uint8*	Memory_SRAM;
+    uint8*	Memory_BWRAM;
+    uint16	Memory_SRAMMask;
+//    bool8	_ARM_asm_padding2;		//123
+//    uint32	_PALMSOS_R9;			//124
+//    uint32	_PALMSOS_R10;    		//128
   									//132
 };
 
@@ -377,12 +376,41 @@ struct SSNESGameFixes
 	bool8 EchoOnlyOutput;
 };
 
+
+struct SICPU
+{
+    uint8  *Speed;
+    struct SOpcodes *S9xOpcodes;
+    uint8  _Carry;
+    uint8  _Zero;
+    uint8  _Negative;
+    uint8  _Overflow;
+//    bool8  CPUExecuting;
+    uint32 ShiftedPB;
+    uint32 ShiftedDB;
+//    uint32 Frame;
+//    uint32 Scanline;
+#ifdef DEBUGGER
+    uint32 FrameAdvanceCount;
+#endif
+};
+
+struct SCPUPACK {
+	struct SRegisters Registers;// 16bytes
+	struct SICPU ICPU;			// 24bytes
+	struct SCPUState CPU;		// 88bytes
+};
+
 START_EXTERN_C
 extern struct SSettings Settings;
-extern struct SSettings *SettingsUncached;
-extern struct SCPUState CPU;
+//extern struct SCPUState CPU;
+//extern struct SCPUPACK CPUPack;
 extern struct SSNESGameFixes SNESGameFixes;
 extern char String [513];
+
+// use Allegrex Scratchpad by ruka
+//extern struct SCPUPACK CPUPack;
+#define CPUPack	((struct SCPUPACK*)0x10000)[0]
 
 void S9xExit ();
 void S9xMessage (int type, int number, const char *message);

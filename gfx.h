@@ -61,31 +61,31 @@ struct SGFX{
     uint32 ZPitch;    // Pitch of ZBuffer
     uint32 PPL;	      // Number of pixels on each of Screen buffer
     uint32 PPLx2;
-    uint32 PixSize;
+//    uint32 PixSize;
     uint8  *S;
     uint8  *DB;
     uint16 *ScreenColors;
     uint32 DepthDelta;
     uint8  Z1;
     uint8  Z2;
+    uint8 Mode7Mask;
+    uint8 Mode7PriorityMask;
     uint32 FixedColour;
-    const char *InfoString;
-    uint32 InfoStringTimeout;
-    uint32 StartY;
-    uint32 EndY;
+//    const char *InfoString;
+//    uint32 InfoStringTimeout;
+    uint16 StartY;
+    uint16 EndY;
     struct ClipData *pCurrentClip;
-    uint32 Mode7Mask;
-    uint32 Mode7PriorityMask;
     
-    int	   OBJList [129];
-    uint32 Sizes [129];
-    int    VPositions [129];
-
     uint8  r212c;
     uint8  r212d;
     uint8  r2130;
     uint8  r2131;
     bool8  Pseudo;
+
+    short   OBJList [129];
+    uint8 Sizes [129];
+    short   VPositions [129];
     
 #ifdef GFX_MULTI_FORMAT
     uint32 PixelFormat;
@@ -94,8 +94,8 @@ struct SGFX{
     void   (*DecomposePixel) (uint32 Pixel, uint32 &R, uint32 &G, uint32 &B);
 #endif
 
-	uint32 solid1;
-	uint32 solid2;
+//	uint32 solid1;
+//	uint32 solid2;
 };
 
 struct SLineData {
@@ -111,16 +111,16 @@ struct SLineData {
 
 struct SBG
 {
-    uint32 TileSize;
-    uint32 BitShift;
-    uint32 TileShift;
-    uint32 TileAddress;
-    uint32 NameSelect;
-    uint32 SCBase;
+    uint8 TileSizeIs16;
+    uint8 BitShift;
+    uint16 TileAddress;
+    uint16 NameSelect;
+    uint16 SCBase;
+    uint8 TileShift;
 
-    uint32 StartPalette;
-    uint32 PaletteShift;
-    uint32 PaletteMask;
+    uint8 StartPalette;
+    uint8 PaletteShift;
+    uint8 PaletteMask;
     
     uint8 *Buffer,*BufferRam;
     uint8 *Buffered;
@@ -232,6 +232,9 @@ typedef void (*LargePixelRendererPSP) (uint32 Tile, s32 x,s32 y,
 				    uint32 StartPixel, uint32 Pixels,
 				    uint32 StartLine, uint32 LineCount);
 				    
+
+#define CACHE_ON(a) (((u32)a)&~0x40000000)
+#define CACHE_OFF(a) (((u32)a)|0x40000000)
 
 
 START_EXTERN_C

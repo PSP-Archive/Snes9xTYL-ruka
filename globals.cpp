@@ -52,6 +52,7 @@
 #include "soundux.h"
 #include "cheats.h"
 #include "sa1.h"
+#include "srtc.h"
 #if not (defined(__GP32__))
 #include "netplay.h"
 #endif
@@ -69,11 +70,7 @@ uint8 APUI03a,APUI03b,APUI03c;
 
 struct Missing missing;
 
-struct SICPU ICPU;
-
-struct SCPUState CPU;
-
-//struct SRegisters Registers;
+//struct SCPUPACK __attribute__((aligned(64))) CPUPack;
 
 
 int old_cpu_cycles,cpu_glob_cycles;
@@ -81,41 +78,23 @@ int old_cpu_cycles,cpu_glob_cycles;
 
 struct SSettings Settings;
 struct SDSP1 DSP1;
-struct SSA1Registers SA1Registers;
-struct SSA1 SA1;
+struct SSA1PACK __attribute__((aligned(64))) SA1Pack;
 
-uint8 *SRAM = NULL;
+uint8 __attribute__((aligned(64))) SRAM[0x20000+MAX_RTC_INDEX+16];
 uint8 *ROM = NULL;
-uint8 *RegRAM = NULL;
+//uint8 *RegRAM = NULL;
 uint8 *C4RAM = NULL;
 uint8 *RAM = NULL;
-uint8 *VRAM = NULL;
-uint8 *VRAMmode7 = NULL;
+uint8 __attribute__((aligned(64))) VRAM[0x10000];
+//uint8 *VRAMmode7 = NULL;
 uint8 *BWRAM = NULL;
 uint8 *FillRAM = NULL;
 
-
-
-long OpAddress = 0;
+struct SMEMMAPBLOCKS __attribute__((aligned(64))) MemBlock[MEMMAP_NUM_BLOCKS];
 
 CMemory Memory;
 
 struct SSNESGameFixes SNESGameFixes;
-
-uint8 A1 = 0, A2 = 0, A3 = 0, A4 = 0, W3 = 0, W4 = 0;
-uint8 Ans8 = 0;
-uint16 Ans16 = 0;
-uint32 Ans32 = 0;
-
-
- uint8 W1= 0, W2 = 0;
- uint8 Work8 = 0;
- uint16 Work16 = 0;
- uint32 Work32 = 0;
- signed char s9xInt8 = 0;
- short s9xInt16 = 0;
- long s9xInt32 = 0;
-
 END_EXTERN_C
 
 #ifndef ZSNES_FX
@@ -126,8 +105,9 @@ uint8 *SFXPlotTable = NULL;
 END_EXTERN_C
 #endif
 
-struct SPPU PPU;
-struct InternalPPU IPPU;
+struct SPPUPACK __attribute__((aligned(64))) PPUPack;
+//struct SPPU PPU;
+//struct InternalPPU IPPU;
 
 struct SDMA DMA[8];
 
@@ -153,10 +133,10 @@ NormalTileRendererN DrawHiResTilePtrN = NULL;
 ClippedTileRendererN DrawHiResClippedTilePtrN = NULL;
 LargePixelRendererN DrawLargePixelPtrN = NULL;
 
-uint32 odd_high[4][16];
-uint32 odd_low[4][16];
-uint32 even_high[4][16];
-uint32 even_low[4][16];
+uint32 __attribute__((aligned(64))) odd_high[4][16];
+uint32 __attribute__((aligned(64))) odd_low[4][16];
+uint32 __attribute__((aligned(64))) even_high[4][16];
+uint32 __attribute__((aligned(64))) even_low[4][16];
 
 
 
@@ -194,7 +174,7 @@ uint32 HIGH_BITS_SHIFTED_TWO_MASK = 0;
 uint32 current_graphic_format = RGB565;
 #endif
 
-uint8 GetBank = 0;
+//uint8 GetBank = 0;
 struct SCheatData Cheat;
 
 
@@ -261,10 +241,8 @@ uint8 Depths[8][4] =
     {TILE_8BIT, 0, 0, 0},                         // 6
     {0, 0, 0, 0}                                  // 7
 };
-uint8 BGSizes [2] = {
-    8, 16
-};
-uint16 DirectColourMaps [8][256];
+
+uint16 __attribute__((aligned(64))) DirectColourMaps [8][256];
 
 
 
@@ -285,7 +263,7 @@ uint32 TailMask [5] = {
 };
 
 START_EXTERN_C
-uint8 __attribute__((aligned(16))) APUROM [64] =
+uint8 __attribute__((aligned(64))) APUROM [64] =
 {
     0xCD,0xEF,0xBD,0xE8,0x00,0xC6,0x1D,0xD0,0xFC,0x8F,0xAA,0xF4,0x8F,
     0xBB,0xF5,0x78,0xCC,0xF4,0xD0,0xFB,0x2F,0x19,0xEB,0xF4,0xD0,0xFC,
@@ -294,7 +272,7 @@ uint8 __attribute__((aligned(16))) APUROM [64] =
     0xF4,0xC4,0xF4,0xDD,0x5D,0xD0,0xDB,0x1F,0x00,0x00,0xC0,0xFF
 };
 // Raw SPC700 instruction cycle lengths
-int32 __attribute__((aligned(16))) S9xAPUCycleLengths [256] = 
+uint8 __attribute__((aligned(64))) S9xAPUCycleLengths [256] = 
 {
     /*        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, a, b, c, d, e, f, */
     /* 00 */  2, 8, 4, 5, 3, 4, 3, 6, 2, 6, 5, 4, 5, 4, 6, 8, 
@@ -317,7 +295,7 @@ int32 __attribute__((aligned(16))) S9xAPUCycleLengths [256] =
 
 // Actual data used by CPU emulation, will be scaled by APUReset routine
 // to be relative to the 65c816 instruction lengths.
-int32 __attribute__((aligned(16))) S9xAPUCycles [256] =
+uint16 __attribute__((aligned(64))) S9xAPUCycles [256] =
 {
     /*        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, a, b, c, d, e, f, */
     /* 00 */  2, 8, 4, 5, 3, 4, 3, 6, 2, 6, 5, 4, 5, 4, 6, 8, 

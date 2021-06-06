@@ -62,12 +62,12 @@
     register uint32 l; \
     if (BG.DirectColourMode) \
     { \
-	if (IPPU.DirectColourMapsNeedRebuild) \
+	if (PPUPack.IPPU.DirectColourMapsNeedRebuild) \
             S9xBuildDirectColourMaps (); \
         GFX.ScreenColors = DirectColourMaps [(Tile >> 10) & BG.PaletteMask]; \
     } \
     else \
-	GFX.ScreenColors = &IPPU.ScreenColors [(((Tile >> 10) & BG.PaletteMask) << BG.PaletteShift) + BG.StartPalette];
+	GFX.ScreenColors = &PPUPack.IPPU.ScreenColors [(((Tile >> 10) & BG.PaletteMask) << BG.PaletteShift) + BG.StartPalette];
 
 #define RENDER_TILE(NORMAL, FLIPPED, N) \
     if (!(Tile & (V_FLIP | H_FLIP))) \

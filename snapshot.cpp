@@ -64,7 +64,7 @@
 #include "srtc.h"
 #include "sdd1.h"
 
-extern uint8 *SRAM;
+extern uint8 SRAM[];
 
 #ifdef ZSNES_FX
 START_EXTERN_C
@@ -364,8 +364,8 @@ static FreezeData SnapSoundData [] = {
 #define OFFSET(f) Offset(f,struct SSA1Registers *)
 
 static FreezeData SnapSA1Registers [] = {
-    {OFFSET (PB),  1, INT_V},
-    {OFFSET (DB),  1, INT_V},
+    {OFFSET (PB[BPDB_INDEX]),  1, INT_V},
+    {OFFSET (DB[BPDB_INDEX]),  1, INT_V},
     {OFFSET (P.W), 2, INT_V},
     {OFFSET (A.W), 2, INT_V},
     {OFFSET (D.W), 2, INT_V},
@@ -426,9 +426,19 @@ bool8 S9xLoadSnapshot (const char *filename)
     return (S9xUnfreezeGame (filename));
 }
 
+bool8 S9xUnfreezeGame_Internal (const char *filename);
+
 bool8 S9xUnfreezeGame (const char *filename)
 {
+	bool8 bRet;
+	S9xSuspendSoundProcess();
+	bRet = S9xUnfreezeGame_Internal(filename);
+	S9xResumeSoundProcess();
+	return bRet;
+}
 
+bool8 S9xUnfreezeGame_Internal (const char *filename)
+{
 
     if (S9xUnfreezeZSNES (filename))
 	return (TRUE);
@@ -476,7 +486,16 @@ bool8 S9xUnfreezeGame (const char *filename)
     return (FALSE);
 }
 
+static void Freeze_Internal (STREAM stream);
+
 static void Freeze (STREAM stream)
+{
+	S9xSuspendSoundProcess();
+	Freeze_Internal(stream);
+	S9xResumeSoundProcess();
+}
+
+static void Freeze_Internal (STREAM stream)
 {
     char buffer[1024];
     int i;
@@ -493,16 +512,16 @@ static void Freeze (STREAM stream)
 
     for (i = 0; i < 8; i++)
     {
-	SoundDataPtr->channels [i].previous16 [0] = (int16) SoundDataPtr->channels [i].previous [0];
-	SoundDataPtr->channels [i].previous16 [1] = (int16) SoundDataPtr->channels [i].previous [1];
+	SoundData.channels [i].previous16 [0] = (int16) SoundData.channels [i].previous [0];
+	SoundData.channels [i].previous16 [1] = (int16) SoundData.channels [i].previous [1];
     }
     sprintf (buffer, "%s:%04d\n", SNAPSHOT_MAGIC, SNAPSHOT_VERSION);
     WRITE_STREAM (buffer, strlen (buffer), stream);
     sprintf (buffer, "NAM:%06d:%s%c", strlen (ROMFilename) + 1,
 	     ROMFilename, 0);
     WRITE_STREAM (buffer, strlen (buffer) + 1, stream);
-    FreezeStruct (stream, "CPU", &CPU, SnapCPU, COUNT (SnapCPU));
-    FreezeStruct (stream, "REG", &Registers, SnapRegisters, COUNT (SnapRegisters));
+    FreezeStruct (stream, "CPU", &CPUPack.CPU, SnapCPU, COUNT (SnapCPU));
+    FreezeStruct (stream, "REG", &CPUPack.Registers, SnapRegisters, COUNT (SnapRegisters));
     FreezeStruct (stream, "PPU", &PPU, SnapPPU, COUNT (SnapPPU));
     FreezeStruct (stream, "DMA", DMA, SnapDMA, COUNT (SnapDMA));
 
@@ -514,20 +533,19 @@ static void Freeze (STREAM stream)
     if (Settings.APUEnabled)
     {
 // APU
-	FreezeStruct (stream, "APU", APUuncached, SnapAPU, COUNT (SnapAPU));
-	FreezeStruct (stream, "ARE", APURegistersUncached, SnapAPURegisters,
+	FreezeStruct (stream, "APU", &APUPack.APU, SnapAPU, COUNT (SnapAPU));
+	FreezeStruct (stream, "ARE", &APUPack.APURegisters, SnapAPURegisters,
 		      COUNT (SnapAPURegisters));
-	FreezeBlock (stream, "ARA", (IAPUuncached->RAM), 0x10000);
-	FreezeStruct (stream, "SOU", (void*)SoundDataPtr, SnapSoundData,
+	FreezeBlock (stream, "ARA", APUPack.IAPU.RAM, 0x10000);
+	FreezeStruct (stream, "SOU", &SoundData, SnapSoundData,
 		      COUNT (SnapSoundData));
     }
     if (Settings.SA1)
     {
-	SA1Registers.PC = SA1.PC - SA1.PCBase;
+	SA1Pack.SA1Registers.PC = SA1Pack.SA1.PC - SA1Pack.SA1.PCBase;
 	S9xSA1PackStatus ();
-	FreezeStruct (stream, "SA1", &SA1, SnapSA1, COUNT (SnapSA1));
-	FreezeStruct (stream, "SAR", &SA1Registers, SnapSA1Registers, 
-		      COUNT (SnapSA1Registers));
+	FreezeStruct (stream, "SA1", &SA1Pack.SA1, SnapSA1, COUNT (SnapSA1));
+	FreezeStruct (stream, "SAR", &SA1Pack.SA1Registers, SnapSA1Registers, COUNT (SnapSA1Registers));
     }
     S9xSetSoundMute (FALSE);
 #ifdef ZSNES_FX
@@ -580,21 +598,23 @@ static int Unfreeze (STREAM stream)
     
     
 
-    uint32 old_flags = CPU.Flags;
-    uint32 sa1_old_flags = SA1.Flags;
+    uint32 old_flags = CPUPack.CPU.Flags;
+    uint32 sa1_old_flags = SA1Pack.SA1.Flags;
     S9xReset ();
     S9xSetSoundMute (TRUE);
 
-    if ((result = UnfreezeStruct (stream, "CPU", &CPU, SnapCPU, COUNT (SnapCPU))) != SUCCESS)
+    if ((result = UnfreezeStruct (stream, "CPU", &CPUPack.CPU, SnapCPU, COUNT (SnapCPU))) != SUCCESS)
 	{
 		return (result);
 	}
 
 
     Memory.FixROMSpeed ();
-    CPU.Flags |= old_flags & (DEBUG_MODE_FLAG | TRACE_FLAG |
+    CPUPack.CPU.Flags |= old_flags & (DEBUG_MODE_FLAG | TRACE_FLAG |
 			      SINGLE_STEP_FLAG | FRAME_ADVANCE_FLAG);
-    if ((result = UnfreezeStruct (stream, "REG", &Registers, SnapRegisters, COUNT (SnapRegisters))) != SUCCESS)
+    CPUPack.Registers.ShiftedPB = 0;
+    CPUPack.Registers.ShiftedDB = 0;
+    if ((result = UnfreezeStruct (stream, "REG", &CPUPack.Registers, SnapRegisters, COUNT (SnapRegisters))) != SUCCESS)
     {
 		return (result);
 	}
@@ -607,7 +627,7 @@ static int Unfreeze (STREAM stream)
 
     IPPU.ColorsChanged = TRUE;
     IPPU.OBJChanged = TRUE;
-    CPU.InDMA = FALSE;
+    CPUPack.CPU.InDMA = FALSE;
     S9xFixColourBrightness ();
     IPPU.RenderThisFrame = FALSE;
 
@@ -637,52 +657,49 @@ static int Unfreeze (STREAM stream)
 		return (result);
 	}
 
-  if (UnfreezeStruct (stream, "APU", APUuncached, SnapAPU, COUNT (SnapAPU)) == SUCCESS) {
-		if ((result = UnfreezeStruct (stream, "ARE", APURegistersUncached, SnapAPURegisters,COUNT (SnapAPURegisters))) != SUCCESS) {
+  if (UnfreezeStruct (stream, "APU", &APUPack.APU, SnapAPU, COUNT (SnapAPU)) == SUCCESS) {
+		if ((result = UnfreezeStruct (stream, "ARE", &APUPack.APURegisters, SnapAPURegisters,COUNT (SnapAPURegisters))) != SUCCESS) {
 		    return (result);
 		}		    
-		if ((result = UnfreezeBlock (stream, "ARA", (IAPUuncached->RAM), 0x10000)) != SUCCESS) {
+		if ((result = UnfreezeBlock (stream, "ARA", APUPack.IAPU.RAM, 0x10000)) != SUCCESS) {
 		    return (result);
 		}		    
-		if ((result = UnfreezeStruct (stream, "SOU", (void*)SoundDataPtr, SnapSoundData,COUNT (SnapSoundData))) != SUCCESS) {
+		if ((result = UnfreezeStruct (stream, "SOU", &SoundData, SnapSoundData,COUNT (SnapSoundData))) != SUCCESS) {
 			return (result);
 		}
 	    	    
 		S9xSetSoundMute (FALSE);
-//#ifdef ME_SOUND		
-		*apu_init_after_load|=2;
-//#else		
-//		(IAPUuncached->PC) = (IAPUuncached->RAM) + (APURegistersUncached->PC);
-//		S9xAPUUnpackStatus ();
-//		if (APUCheckDirectPage ()) (IAPUuncached->DirectPage) = (IAPUuncached->RAM) + 0x100;
-//		else(IAPUuncached->DirectPage) = (IAPUuncached->RAM);
-//#endif			
+
+		APUPack.IAPU.PC = APUPack.IAPU.RAM + APUPack.APURegisters.PC;
+		S9xAPUUnpackStatus ();
+		if (APUCheckDirectPage ()) APUPack.IAPU.DirectPage = APUPack.IAPU.RAM + 0x100;
+		else APUPack.IAPU.DirectPage = APUPack.IAPU.RAM;
+
 		Settings.APUEnabled = TRUE;
-		(IAPUuncached->APUExecuting) = TRUE;
+		SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);\
+		pEvent->IAPU_APUExecuting = TRUE;
   } else {
 		Settings.APUEnabled = FALSE;
-		(IAPUuncached->APUExecuting) = FALSE;
+		SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);\
+		pEvent->IAPU_APUExecuting = FALSE;
 		S9xSetSoundMute (TRUE);
  }
-    if ((result = UnfreezeStruct (stream, "SA1", &SA1, SnapSA1, 
+    if ((result = UnfreezeStruct (stream, "SA1", &SA1Pack.SA1, SnapSA1, 
 				  COUNT(SnapSA1))) == SUCCESS)
     {
-	if ((result = UnfreezeStruct (stream, "SAR", &SA1Registers, 
+	if ((result = UnfreezeStruct (stream, "SAR", &SA1Pack.SA1Registers, 
 				      SnapSA1Registers, COUNT (SnapSA1Registers))) != SUCCESS)
 	{
 		return (result);
 	}
 
 	S9xFixSA1AfterSnapshotLoad ();
-	SA1.Flags |= sa1_old_flags & (TRACE_FLAG);
+	SA1Pack.SA1.Flags |= sa1_old_flags & (TRACE_FLAG);
     }
-//#ifdef ME_SOUND
-//#else    
-//    S9xFixSoundAfterSnapshotLoad ();
-//#endif    
-    ICPU.ShiftedPB = Registers.PB << 16;
-    ICPU.ShiftedDB = Registers.DB << 16;
-    S9xSetPCBase (ICPU.ShiftedPB + Registers.PC);
+
+    S9xFixSoundAfterSnapshotLoad ();
+
+    S9xSetPCBase (CPUPack.Registers.ShiftedPB + CPUPack.Registers.PC);
     
     S9xUnpackStatus ();
     S9xFixCycles ();
@@ -695,8 +712,8 @@ static int Unfreeze (STREAM stream)
     S9xSRTCPostLoadState ();
     if (Settings.SDD1)	S9xSDD1PostLoadState ();
     
-//    (IAPUuncached->NextAPUTimerPos) = CPU.Cycles * 10000L;
-//		(IAPUuncached->APUTimerCounter) = 0; 
+//    (APUPack.IAPU.NextAPUTimerPos) = CPUPack.CPU.Cycles * 10000L;
+//		(APUPack.IAPU.APUTimerCounter) = 0; 
 
     
     return (SUCCESS);
@@ -996,17 +1013,17 @@ bool8 S9xSPCDump (const char *filename)
     if (fwrite (header, sizeof (header), 1, fs) != 1 ||
 	fputc (version, fs) == EOF ||
 	fseek (fs, 37, SEEK_SET) == EOF ||
-	fputc ((APURegistersUncached->PC) & 0xff, fs) == EOF ||
-	fputc ((APURegistersUncached->PC) >> 8, fs) == EOF ||
-	fputc ((APURegistersUncached->YA).B.A, fs) == EOF ||
-	fputc ((APURegistersUncached->X), fs) == EOF ||
-	fputc ((APURegistersUncached->YA).B.Y, fs) == EOF ||
-	fputc ((APURegistersUncached->P), fs) == EOF ||
-	fputc ((APURegistersUncached->S), fs) == EOF ||
+	fputc (APUPack.APURegisters.PC & 0xff, fs) == EOF ||
+	fputc (APUPack.APURegisters.PC >> 8, fs) == EOF ||
+	fputc (APUPack.APURegisters.YA.B.A, fs) == EOF ||
+	fputc (APUPack.APURegisters.X, fs) == EOF ||
+	fputc (APUPack.APURegisters.YA.B.Y, fs) == EOF ||
+	fputc (APUPack.APURegisters.P, fs) == EOF ||
+	fputc (APUPack.APURegisters.S, fs) == EOF ||
 	fseek (fs, 256, SEEK_SET) == EOF ||
-	fwrite ((IAPUuncached->RAM), 0x10000, 1, fs) != 1 ||
-	fwrite (APUuncached->DSP, 1, 256, fs) != 1 ||
-	fwrite ((APUuncached->ExtraRAM), 64, 1, fs) != 1 ||
+	fwrite (APUPack.IAPU.RAM, 0x10000, 1, fs) != 1 ||
+	fwrite (APUPack.APU.DSP, 1, 256, fs) != 1 ||
+	fwrite (APUPack.APU.ExtraRAM, 64, 1, fs) != 1 ||
 	fclose (fs) < 0)
     {
 	S9xSetSoundMute (FALSE);
@@ -1033,22 +1050,22 @@ bool8 S9xUnfreezeZSNES (const char *filename)
 		S9xSetSoundMute (TRUE);
 		
 		// 28 Curr cycle
-		CPU.V_Counter = READ_WORD (&t [29]);
+		CPUPack.CPU.V_Counter = READ_WORD (&t [29]);
 		// 33 instrset
 		Settings.APUEnabled = t [36];
 		
 		// 34 bcycpl cycles per scanline
 		// 35 cycphb cyclers per hblank
 		
-		Registers.A.W   = READ_WORD (&t [41]);
-		Registers.DB    = t [43];
-		Registers.PB    = t [44];
-		Registers.S.W   = READ_WORD (&t [45]);
-		Registers.D.W   = READ_WORD (&t [47]);
-		Registers.X.W   = READ_WORD (&t [49]);
-		Registers.Y.W   = READ_WORD (&t [51]);
-		Registers.P.W   = READ_WORD (&t [53]);
-		Registers.PC    = READ_WORD (&t [55]);
+		CPUPack.Registers.A.W   = READ_WORD (&t [41]);
+		CPUPack.Registers.DB[BPDB_INDEX]    = t [43];
+		CPUPack.Registers.PB[BPDB_INDEX]    = t [44];
+		CPUPack.Registers.S.W   = READ_WORD (&t [45]);
+		CPUPack.Registers.D.W   = READ_WORD (&t [47]);
+		CPUPack.Registers.X.W   = READ_WORD (&t [49]);
+		CPUPack.Registers.Y.W   = READ_WORD (&t [51]);
+		CPUPack.Registers.P.W   = READ_WORD (&t [53]);
+		CPUPack.Registers.PC    = READ_WORD (&t [55]);
 		
 		READ_STREAM (t, 8, fs);
 		READ_STREAM (t, 3019, fs);
@@ -1177,7 +1194,7 @@ bool8 S9xUnfreezeZSNES (const char *filename)
 			S9xSetCPU (t [165 + i], 0x4300 + i);
 		
 		if (t [294])
-			CPU.IRQActive |= PPU_V_BEAM_IRQ_SOURCE | PPU_H_BEAM_IRQ_SOURCE;
+			CPUPack.CPU.IRQActive |= PPU_V_BEAM_IRQ_SOURCE | PPU_H_BEAM_IRQ_SOURCE;
 		
 		S9xSetCPU (t [296], 0x420c);
 		// hdmadata t[297] + 8 * 19
@@ -1194,7 +1211,7 @@ bool8 S9xUnfreezeZSNES (const char *filename)
 		if (Settings.APUEnabled)
 		{
 			// SNES SPC700 RAM (64K)
-			READ_STREAM ((IAPUuncached->RAM), 64 * 1024, fs);
+			READ_STREAM (APUPack.IAPU.RAM, 64 * 1024, fs);
 			
 			// Junk 16 bytes
 			READ_STREAM (t, 16, fs);
@@ -1202,31 +1219,33 @@ bool8 S9xUnfreezeZSNES (const char *filename)
 			// SNES SPC700 state and internal ZSNES SPC700 emulation state
 			READ_STREAM (t, 304, fs);
 			
-			(APURegistersUncached->PC)   = READ_DWORD (&t [0]);
-			(APURegistersUncached->YA).B.A = t [4];
-			(APURegistersUncached->X)    = t [8];
-			(APURegistersUncached->YA).B.Y = t [12];
-			(APURegistersUncached->P)    = t [16];
-			(APURegistersUncached->S)    = t [24];
+			APUPack.APURegisters.PC   = READ_DWORD (&t [0]);
+			APUPack.APURegisters.YA.B.A = t [4];
+			APUPack.APURegisters.X    = t [8];
+			APUPack.APURegisters.YA.B.Y = t [12];
+			APUPack.APURegisters.P    = t [16];
+			APUPack.APURegisters.S    = t [24];
 			
-			(APUuncached->Cycles) = READ_DWORD (&t [32]);
-			(APUuncached->ShowROM) = ((IAPUuncached->RAM) [0xf1] & 0x80) != 0;
-			(APUuncached->OutPorts) [0] = t [36];
-			(APUuncached->OutPorts) [1] = t [37];
-			(APUuncached->OutPorts) [2] = t [38];
-			(APUuncached->OutPorts) [3] = t [39];
+			APUPack.APU.Cycles = READ_DWORD (&t [32]);
+			SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);
+			pEvent->APU_Cycles = APUPack.APU.Cycles;
+			APUPack.APU.ShowROM = (APUPack.IAPU.RAM [0xf1] & 0x80) != 0;
+			APUPack.APU.OutPorts[0] = t [36];
+			APUPack.APU.OutPorts[1] = t [37];
+			APUPack.APU.OutPorts[2] = t [38];
+			APUPack.APU.OutPorts[3] = t [39];
 			
-			(APUuncached->TimerEnabled) [0] = (t [40] & 1) != 0;
-			(APUuncached->TimerEnabled) [1] = (t [40] & 2) != 0;
-			(APUuncached->TimerEnabled) [2] = (t [40] & 4) != 0;
+			APUPack.APU.TimerEnabled[0] = (t [40] & 1) != 0;
+			APUPack.APU.TimerEnabled[1] = (t [40] & 2) != 0;
+			APUPack.APU.TimerEnabled[2] = (t [40] & 4) != 0;
 			S9xSetAPUTimer (0xfa, t [41]);
 			S9xSetAPUTimer (0xfb, t [42]);
 			S9xSetAPUTimer (0xfc, t [43]);
-			(APUuncached->Timer) [0] = t [44];
-			(APUuncached->Timer) [1] = t [45];
-			(APUuncached->Timer) [2] = t [46];
+			APUPack.APU.Timer[0] = t [44];
+			APUPack.APU.Timer[1] = t [45];
+			APUPack.APU.Timer[2] = t [46];
 			
-			memmove ((APUuncached->ExtraRAM), &t [48], 64);
+			memmove (APUPack.APU.ExtraRAM, &t [48], 64);
 			
 			// Internal ZSNES sound DSP state
 			READ_STREAM (t, 1068, fs);
@@ -1234,7 +1253,7 @@ bool8 S9xUnfreezeZSNES (const char *filename)
 			// SNES sound DSP register values
 			READ_STREAM (t, 256, fs);
 			
-			uint8 saved = (IAPUuncached->RAM) [0xf2];
+			uint8 saved = APUPack.IAPU.RAM [0xf2];
 			
 			for (i = 0; i < 128; i++)
 			{
@@ -1246,33 +1265,32 @@ bool8 S9xUnfreezeZSNES (const char *filename)
 				case APU_FLG:
 					t [i] &= ~APU_SOFT_RESET;
 				default:
-					(IAPUuncached->RAM) [0xf2] = i;
+					APUPack.IAPU.RAM [0xf2] = i;
 					S9xSetAPUDSP (t [i]);
 					break;
 				}
 			}
-			(IAPUuncached->RAM) [0xf2] = APU_KON;
+			APUPack.IAPU.RAM [0xf2] = APU_KON;
 			S9xSetAPUDSP (t [APU_KON]);
-			(IAPUuncached->RAM) [0xf2] = saved;
+			APUPack.IAPU.RAM [0xf2] = saved;
 			
 			S9xSetSoundMute (FALSE);
-//#ifdef ME_SOUND		
-		*apu_init_after_load|=2;
-//#else				
-//			(IAPUuncached->PC) = (IAPUuncached->RAM) + (APURegistersUncached->PC);
-//			S9xAPUUnpackStatus ();
-//			if (APUCheckDirectPage ())
-//				(IAPUuncached->DirectPage) = (IAPUuncached->RAM) + 0x100;
-//			else
-//				(IAPUuncached->DirectPage) = (IAPUuncached->RAM);
-//#endif				
+
+			APUPack.IAPU.PC = APUPack.IAPU.RAM + APUPack.APURegisters.PC;
+			S9xAPUUnpackStatus ();
+			if (APUCheckDirectPage ())
+				APUPack.IAPU.DirectPage = APUPack.IAPU.RAM + 0x100;
+			else
+				APUPack.IAPU.DirectPage = APUPack.IAPU.RAM;
+
 			Settings.APUEnabled = TRUE;
-			(IAPUuncached->APUExecuting) = TRUE;
+			pEvent->IAPU_APUExecuting = TRUE;
 		}
 		else
 		{
 			Settings.APUEnabled = FALSE;
-			(IAPUuncached->APUExecuting) = FALSE;
+			SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);\
+			pEvent->IAPU_APUExecuting = FALSE;
 			S9xSetSoundMute (TRUE);
 		}
 		
@@ -1296,15 +1314,15 @@ bool8 S9xUnfreezeZSNES (const char *filename)
 			S9xSetSA1 (t [36], 0x2201);
 			S9xSetSA1 (t [41], 0x2209);
 			
-			SA1Registers.A.W = READ_DWORD (&t [592]);
-			SA1Registers.X.W = READ_DWORD (&t [596]);
-			SA1Registers.Y.W = READ_DWORD (&t [600]);
-			SA1Registers.D.W = READ_DWORD (&t [604]);
-			SA1Registers.DB  = t [608];
-			SA1Registers.PB  = t [612];
-			SA1Registers.S.W = READ_DWORD (&t [616]);
-			SA1Registers.PC  = READ_DWORD (&t [636]);
-			SA1Registers.P.W = t [620] | (t [624] << 8);
+			SA1Pack.SA1Registers.A.W = READ_DWORD (&t [592]);
+			SA1Pack.SA1Registers.X.W = READ_DWORD (&t [596]);
+			SA1Pack.SA1Registers.Y.W = READ_DWORD (&t [600]);
+			SA1Pack.SA1Registers.D.W = READ_DWORD (&t [604]);
+			SA1Pack.SA1Registers.DB[BPDB_INDEX]  = t [608];
+			SA1Pack.SA1Registers.PB[BPDB_INDEX]  = t [612];
+			SA1Pack.SA1Registers.S.W = READ_DWORD (&t [616]);
+			SA1Pack.SA1Registers.PC  = READ_DWORD (&t [636]);
+			SA1Pack.SA1Registers.P.W = t [620] | (t [624] << 8);
 			
 			memmove (&FillRAM [0x3000], t + 692, 2 * 1024);
 			
@@ -1455,14 +1473,14 @@ READ_STREAM(&temp, 4, fs);
 		Memory.FixROMSpeed ();
 		IPPU.ColorsChanged = TRUE;
 		IPPU.OBJChanged = TRUE;
-		CPU.InDMA = FALSE;
+		CPUPack.CPU.InDMA = FALSE;
 		S9xFixColourBrightness ();
 		IPPU.RenderThisFrame = FALSE;
 		
 		S9xFixSoundAfterSnapshotLoad ();
-		ICPU.ShiftedPB = Registers.PB << 16;
-		ICPU.ShiftedDB = Registers.DB << 16;
-		S9xSetPCBase (ICPU.ShiftedPB + Registers.PC);
+//		CPUPack.ICPU.ShiftedPB = CPUPack.Registers.PB << 16;
+//		CPUPack.ICPU.ShiftedDB = CPUPack.Registers.DB << 16;
+		S9xSetPCBase (CPUPack.Registers.ShiftedPB + CPUPack.Registers.PC);
 		S9xUnpackStatus ();
 		S9xFixCycles ();
 		S9xReschedule ();
@@ -1478,361 +1496,4 @@ READ_STREAM(&temp, 4, fs);
     free(t);
     
     return (FALSE);
-
-
-
-
-/*******************************************************************/
-/*******************************************************************/
-/*******************************************************************/
-/*******************************************************************/
-/*******************************************************************/
-/*******************************************************************/
-
-
-#if 0
-//    FILE *fs;
-	STREAM fs;
-    uint8 *t;// [4000];
-    t=(uint8*)malloc(4000);
-
-//    if (!(fs = fopen (filename, "rb")))
-	if (!(fs = OPEN_STREAM(filename,"rb")))
-	{
-		free(t);
-		return (FALSE);
-	}
-//    if (fread (t, 64, 1, fs) == 1 &&	
-//	strncmp ((char *) t, "ZSNES Save State File V0.6", 26) == 0)
-	READ_STREAM(t,64,fs);
-	if (strncmp ((char *) t, "ZSNES Save State File V0.6", 26) == 0)
-    {
-	S9xReset ();
-	S9xSetSoundMute (TRUE);
-
-	// 28 Curr cycle
-	CPU.V_Counter = READ_WORD (&t [29]);
-	// 33 instrset
-	Settings.APUEnabled = t [36];
-
-	// 34 bcycpl cycles per scanline
-	// 35 cycphb cyclers per hblank
-
-	Registers.A.W   = READ_WORD (&t [41]);
-	Registers.DB    = t [43];
-	Registers.PB    = t [44];
-	Registers.S.W   = READ_WORD (&t [45]);
-	Registers.D.W   = READ_WORD (&t [47]);
-	Registers.X.W   = READ_WORD (&t [49]);
-	Registers.Y.W   = READ_WORD (&t [51]);
-	Registers.P.W   = READ_WORD (&t [53]);
-	Registers.PC    = READ_WORD (&t [55]);
-
-//	fread (t, 1, 8, fs);
-//	fread (t, 1, 3019, fs);
-	READ_STREAM(t,8,fs);
-	READ_STREAM(t,3019,fs);
-
-	S9xSetCPU (t [2], 0x4200);
-	FillRAM [0x4210] = t [3];
-	PPU.IRQVBeamPos = READ_WORD (&t [4]);
-	PPU.IRQHBeamPos = READ_WORD (&t [2527]);
-	PPU.Brightness = t [6];
-	PPU.ForcedBlanking = t [8] >> 7;
-
-	int i;
-	for (i = 0; i < 544; i++)
-	    S9xSetPPU (t [0464 + i], 0x2104);
-
-	PPU.OBJNameBase = READ_WORD (&t [9]);
-	PPU.OBJNameSelect = READ_WORD (&t [13]) - PPU.OBJNameBase;
-	switch (t [18])
-	{
-	case 4:
-	    if (t [17] == 1)
-		PPU.OBJSizeSelect = 0;
-	    else
-		PPU.OBJSizeSelect = 6;
-	    break;
-	case 16:
-	    if (t [17] == 1)
-		PPU.OBJSizeSelect = 1;
-	    else
-		PPU.OBJSizeSelect = 3;
-	    break;
-	default:
-	case 64:
-	    if (t [17] == 1)
-		PPU.OBJSizeSelect = 2;
-	    else
-	    if (t [17] == 4)
-		PPU.OBJSizeSelect = 4;
-	    else
-		PPU.OBJSizeSelect = 5;
-	    break;
-	}
-	PPU.OAMAddr = READ_WORD (&t [25]);
-	PPU.SavedOAMAddr =  READ_WORD (&t [27]);
-	PPU.FirstSprite = t [29];
-	PPU.BGMode = t [30];
-	PPU.BG3Priority = t [31];
-	PPU.BG[0].BGSize = (t [32] >> 0) & 1;
-	PPU.BG[1].BGSize = (t [32] >> 1) & 1;
-	PPU.BG[2].BGSize = (t [32] >> 2) & 1;
-	PPU.BG[3].BGSize = (t [32] >> 3) & 1;
-	PPU.Mosaic = t [33] + 1;
-	PPU.BGMosaic [0] = (t [34] & 1) != 0;
-	PPU.BGMosaic [1] = (t [34] & 2) != 0;
-	PPU.BGMosaic [2] = (t [34] & 4) != 0;
-	PPU.BGMosaic [3] = (t [34] & 8) != 0;
-	PPU.BG [0].SCBase = READ_WORD (&t [35]) >> 1;
-	PPU.BG [1].SCBase = READ_WORD (&t [37]) >> 1;
-	PPU.BG [2].SCBase = READ_WORD (&t [39]) >> 1;
-	PPU.BG [3].SCBase = READ_WORD (&t [41]) >> 1;
-	PPU.BG [0].SCSize = t [67];
-	PPU.BG [1].SCSize = t [68];
-	PPU.BG [2].SCSize = t [69];
-	PPU.BG [3].SCSize = t [70];
-	PPU.BG[0].NameBase = READ_WORD (&t [71]) >> 1;
-	PPU.BG[1].NameBase = READ_WORD (&t [73]) >> 1;
-	PPU.BG[2].NameBase = READ_WORD (&t [75]) >> 1;
-	PPU.BG[3].NameBase = READ_WORD (&t [77]) >> 1;
-	PPU.BG[0].HOffset = READ_WORD (&t [79]);
-	PPU.BG[1].HOffset = READ_WORD (&t [81]);
-	PPU.BG[2].HOffset = READ_WORD (&t [83]);
-	PPU.BG[3].HOffset = READ_WORD (&t [85]);
-	PPU.BG[0].VOffset = READ_WORD (&t [89]);
-	PPU.BG[1].VOffset = READ_WORD (&t [91]);
-	PPU.BG[2].VOffset = READ_WORD (&t [93]);
-	PPU.BG[3].VOffset = READ_WORD (&t [95]);
-	PPU.VMA.Increment = READ_WORD (&t [97]) >> 1;
-	PPU.VMA.High = t [99];
-	IPPU.FirstVRAMRead = t [100];
-	S9xSetPPU (t [2512], 0x2115);
-	PPU.VMA.Address = READ_DWORD (&t [101]);
-	for (i = 0; i < 512; i++)
-	    S9xSetPPU (t [1488 + i], 0x2122);
-
-	PPU.CGADD = (uint8) READ_WORD (&t [105]);
-	FillRAM [0x212c] = t [108];
-	FillRAM [0x212d] = t [109];
-	PPU.ScreenHeight = READ_WORD (&t [111]);
-	FillRAM [0x2133] = t [2526];
-	FillRAM [0x4202] = t [113];
-	FillRAM [0x4204] = t [114];
-	FillRAM [0x4205] = t [115];
-	FillRAM [0x4214] = t [116];
-	FillRAM [0x4215] = t [117];
-	FillRAM [0x4216] = t [118];
-	FillRAM [0x4217] = t [119];
-	PPU.VBeamPosLatched = READ_WORD (&t [122]);
-	PPU.HBeamPosLatched = READ_WORD (&t [120]);
-	PPU.Window1Left = t [127];
-	PPU.Window1Right = t [128];
-	PPU.Window2Left = t [129];
-	PPU.Window2Right = t [130];
-	S9xSetPPU (t [131] | (t [132] << 4), 0x2123);
-	S9xSetPPU (t [133] | (t [134] << 4), 0x2124);
-	S9xSetPPU (t [135] | (t [136] << 4), 0x2125);
-	S9xSetPPU (t [137], 0x212a);
-	S9xSetPPU (t [138], 0x212b);
-	S9xSetPPU (t [139], 0x212e);
-	S9xSetPPU (t [140], 0x212f);
-	S9xSetPPU (t [141], 0x211a);
-	PPU.MatrixA = READ_WORD (&t [142]);
-	PPU.MatrixB = READ_WORD (&t [144]);
-	PPU.MatrixC = READ_WORD (&t [146]);
-	PPU.MatrixD = READ_WORD (&t [148]);
-	PPU.CentreX = READ_WORD (&t [150]);
-	PPU.CentreY = READ_WORD (&t [152]);
-	// JoyAPos t[154]
-	// JoyBPos t[155]
-	FillRAM [2134] = t [156]; // Matrix mult
-	FillRAM [2135] = t [157]; // Matrix mult
-	FillRAM [2136] = t [158]; // Matrix mult
-	PPU.WRAM = READ_DWORD (&t [161]);
-
-	for (i = 0; i < 128; i++)
-	    S9xSetCPU (t [165 + i], 0x4300 + i);
-
-	if (t [294])
-	    CPU.IRQActive |= PPU_V_BEAM_IRQ_SOURCE | PPU_H_BEAM_IRQ_SOURCE;
-
-	S9xSetCPU (t [296], 0x420c);
-	// hdmadata t[297] + 8 * 19
-	PPU.FixedColourRed = t [450];
-	PPU.FixedColourGreen = t [451];
-	PPU.FixedColourBlue = t [452];
-	S9xSetPPU (t [454], 0x2130);
-	S9xSetPPU (t [455], 0x2131);
-	// vraminctype ...
-
-//	fread (RAM, 1, 128 * 1024, fs);
-//	fread (VRAM, 1, 64 * 1024, fs);
-	READ_STREAM(RAM,128*1024,fs);
-	READ_STREAM(VRAM,64*1024,fs);
-
-
-	if (Settings.APUEnabled)
-	{
-	    // SNES SPC700 RAM (64K)
-//	    fread ((IAPUuncached->RAM), 1, 64 * 1024, fs);
-		READ_STREAM ((IAPUuncached->RAM), 64 * 1024, fs);
-
-	    // Junk 16 bytes
-//	    fread (t, 1, 16, fs);
-		READ_STREAM (t, 16, fs);
-
-	    // SNES SPC700 state and internal ZSNES SPC700 emulation state
-//	    fread (t, 1, 304, fs);
-		READ_STREAM (t,304,fs);
-
-	    (APURegistersUncached->PC)   = READ_DWORD (&t [0]);
-	    (APURegistersUncached->YA).B.A = t [4];
-	    (APURegistersUncached->X)    = t [8];
-	    (APURegistersUncached->YA).B.Y = t [12];
-	    (APURegistersUncached->P)    = t [16];
-	    (APURegistersUncached->S)    = t [24];
-	    
-	    (APUuncached->Cycles) = READ_DWORD (&t [32]);
-	    (APUuncached->ShowROM) = ((IAPUuncached->RAM) [0xf1] & 0x80) != 0;
-	    (APUuncached->OutPorts) [0] = t [36];
-	    (APUuncached->OutPorts) [1] = t [37];
-	    (APUuncached->OutPorts) [2] = t [38];
-	    (APUuncached->OutPorts) [3] = t [39];
-
-	    (APUuncached->TimerEnabled) [0] = (t [40] & 1) != 0;
-	    (APUuncached->TimerEnabled) [1] = (t [40] & 2) != 0;
-	    (APUuncached->TimerEnabled) [2] = (t [40] & 4) != 0;
-	    S9xSetAPUTimer (0xfa, t [41]);
-	    S9xSetAPUTimer (0xfb, t [42]);
-	    S9xSetAPUTimer (0xfc, t [43]);
-	    (APUuncached->Timer) [0] = t [44];
-	    (APUuncached->Timer) [1] = t [45];
-	    (APUuncached->Timer) [2] = t [46];
-
-	    memmove ((APUuncached->ExtraRAM), &t [48], 64);
-
-	    // Internal ZSNES sound DSP state
-//	    fread (t, 1, 1068, fs);
-		READ_STREAM (t,1068,fs);
-
-	    // SNES sound DSP register values
-//	    fread (t, 1, 256, fs);
-		READ_STREAM (t,256,fs);
-	    
-	    uint8 saved = (IAPUuncached->RAM) [0xf2];
-
-	    for (i = 0; i < 128; i++)
-	    {
-		switch (i)
-		{
-		case APU_KON:
-		case APU_KOFF:
-		    break;
-		case APU_FLG:
-		    t [i] &= ~APU_SOFT_RESET;
-		default:
-		    (IAPUuncached->RAM) [0xf2] = i;
-		    S9xSetAPUDSP (t [i]);
-		    break;
-		}
-	    }
-	    (IAPUuncached->RAM) [0xf2] = APU_KON;
-	    S9xSetAPUDSP (t [APU_KON]);
-	    (IAPUuncached->RAM) [0xf2] = saved;
-
-	    S9xSetSoundMute (FALSE);
-//#ifdef ME_SOUND		
-		*apu_init_after_load|=2;
-//#else		    
-//	    (IAPUuncached->PC) = (IAPUuncached->RAM) + (APURegistersUncached->PC);
-//	    S9xAPUUnpackStatus ();
-//	    if (APUCheckDirectPage ())
-//		(IAPUuncached->DirectPage) = (IAPUuncached->RAM) + 0x100;
-//	    else
-//		(IAPUuncached->DirectPage) = (IAPUuncached->RAM);
-//#endif		
-	    Settings.APUEnabled = TRUE;
-	    (IAPUuncached->APUExecuting) = TRUE;
-	}
-	else
-	{
-	    Settings.APUEnabled = FALSE;
-	    (IAPUuncached->APUExecuting) = FALSE;
-	    S9xSetSoundMute (TRUE);
-	}
-
-	if (Settings.SuperFX)
-	{
-//	    fread (SRAM, 1, 64 * 1024, fs);
-//	    fseek (fs, 64 * 1024, SEEK_CUR);
-//	    fread (FillRAM + 0x7000, 1, 692, fs);
-		READ_STREAM (SRAM,64*1024,fs);
-		SEEK_STREAM (64*1024,SEEK_CUR,fs);		
-		READ_STREAM (FillRAM+0x7000,692,fs);
-	}
-	if (Settings.SA1)
-	{
-//	    fread (t, 1, 2741, fs);
-	    READ_STREAM (t, 2741, fs);
-	    
-	    S9xSetSA1 (t [4], 0x2200);  // Control
-	    S9xSetSA1 (t [12], 0x2203);	// ResetV low
-	    S9xSetSA1 (t [13], 0x2204); // ResetV hi
-	    S9xSetSA1 (t [14], 0x2205); // NMI low
-	    S9xSetSA1 (t [15], 0x2206); // NMI hi
-	    S9xSetSA1 (t [16], 0x2207); // IRQ low
-	    S9xSetSA1 (t [17], 0x2208); // IRQ hi
-	    S9xSetSA1 (((READ_DWORD (&t [28]) - (4096*1024-0x6000))) >> 13, 0x2224);
-	    S9xSetSA1 (t [36], 0x2201);
-	    S9xSetSA1 (t [41], 0x2209);
-
-	    SA1Registers.A.W = READ_DWORD (&t [592]);
-	    SA1Registers.X.W = READ_DWORD (&t [596]);
-	    SA1Registers.Y.W = READ_DWORD (&t [600]);
-	    SA1Registers.D.W = READ_DWORD (&t [604]);
-	    SA1Registers.DB  = t [608];
-	    SA1Registers.PB  = t [612];
-	    SA1Registers.S.W = READ_DWORD (&t [616]);
-	    SA1Registers.PC  = READ_DWORD (&t [636]);
-	    SA1Registers.P.W = t [620] | (t [624] << 8);
-
-	    memmove (&FillRAM [0x3000], t + 692, 2 * 1024);
-
-//	    fread (SRAM, 1, 64 * 1024, fs);
-		READ_STREAM (SRAM, 64*1024, fs);
-//	    fseek (fs, 64 * 1024, SEEK_CUR);
-		SEEK_STREAM (64*1024,SEEK_CUR,fs);
-	    S9xFixSA1AfterSnapshotLoad ();
-	}
-//	fclose (fs);
-	CLOSE_STREAM(fs);
-
-	Memory.FixROMSpeed ();
-	IPPU.ColorsChanged = TRUE;
-	IPPU.OBJChanged = TRUE;
-	CPU.InDMA = FALSE;
-	S9xFixColourBrightness ();
-	IPPU.RenderThisFrame = FALSE;
-
-	S9xFixSoundAfterSnapshotLoad ();
-	ICPU.ShiftedPB = Registers.PB << 16;
-	ICPU.ShiftedDB = Registers.DB << 16;
-	S9xSetPCBase (ICPU.ShiftedPB + Registers.PC);
-	S9xUnpackStatus ();
-	S9xFixCycles ();
-	S9xReschedule ();
-#ifdef ZSNES_FX
-	if (Settings.SuperFX)
-	    S9xSuperFXPostLoadState ();
-#endif
-	free(t);
-	return (TRUE);
-    }
-//    fclose (fs);
-	CLOSE_STREAM(fs);
-	free(t);
-    return (FALSE);
-#endif    
 }

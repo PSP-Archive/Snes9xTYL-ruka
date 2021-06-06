@@ -131,56 +131,30 @@
 #include "memmap.h"
 //#include "cpuexec.h"
 
-/*extern int Echo[24000];
-extern int DummyEchoBuffer[SOUND_BUFFER_SIZE];
-extern int MixBuffer[SOUND_BUFFER_SIZE];
-extern int EchoBuffer[SOUND_BUFFER_SIZE];
-extern int FilterTaps [8];
-//extern unsigned long Z;
-extern int Loop [16];*/
+SoundStatus __attribute__((aligned(64))) stSoundStatus;
+SSoundData __attribute__((aligned(64))) SoundData;
 
-volatile SoundStatus *so;
-SSoundData SoundData;
-volatile SSoundData *SoundDataPtr;
+struct SAPUPACK __attribute__((aligned(64))) APUPack;
+//struct SAPU __attribute__((aligned(64))) APU;
+//struct SIAPU __attribute__((aligned(64))) IAPU;
+//struct SAPURegisters __attribute__((aligned(64))) APURegisters;
 
- struct SAPU *APU;
- struct SIAPU *IAPU;
- struct SAPURegisters *APURegisters;
- struct SAPU *APUuncached;
- struct SIAPU *IAPUuncached;
- struct SAPURegisters *APURegistersUncached;
+SAPUEVENTS __attribute__((aligned(64))) stAPUEvents;
 
-volatile int *apu_cycles_left,*apu_glob_cycles;
-volatile int *apu_event1,*apu_event2,*apu_event1_cpt1,*apu_event2_cpt1,*apu_event1_cpt2,*apu_event2_cpt2;
-volatile unsigned short *apu_ram_write_log;
-volatile int *apu_init_after_load,*apu_can_execute,*apu_ram_write_cpt1,*apu_ram_write_cpt2;
-
-//int __attribute__((aligned(64))) Echo[24000];
-int *Echo,*DummyEchoBuffer,*MixBuffer,*EchoBuffer,*wave;
-/*int __attribute__((aligned(64))) DummyEchoBuffer[SOUND_BUFFER_SIZE];
+int __attribute__((aligned(64))) Echo[24000];
+int __attribute__((aligned(64))) DummyEchoBuffer[SOUND_BUFFER_SIZE];
 int __attribute__((aligned(64))) MixBuffer[SOUND_BUFFER_SIZE];
 int __attribute__((aligned(64))) EchoBuffer[SOUND_BUFFER_SIZE];
-int __attribute__((aligned(64))) wave[SOUND_BUFFER_SIZE];*/
+int __attribute__((aligned(64))) wave[SOUND_BUFFER_SIZE];
 
-int FilterTaps [8];
-unsigned long Z = 0;
-int Loop [16];
 
-long FilterValues[4][2] =
-{
-    {0, 0},
-    {240, 0},
-    {488, -240},
-    {460, -208}
-};
+SOUNDUX_LOCAL __attribute__((aligned(64))) stSoundux = {0};
 
-int NoiseFreq [32] = {
+short __attribute__((aligned(64))) NoiseFreq [32] = {
     0, 16, 21, 25, 31, 42, 50, 63, 84, 100, 125, 167, 200, 250, 333,
     400, 500, 667, 800, 1000, 1300, 1600, 2000, 2700, 3200, 4000,
     5300, 6400, 8000, 10700, 16000, 32000
 };
-
-//char dummy_yo1[1024*1024*1];
 
 
 #undef ABS
@@ -208,25 +182,25 @@ int NoiseFreq [32] = {
 #define JUST_PLAYED_LAST_SAMPLE(c) ((c)->sample_pointer >= LAST_SAMPLE)
 
 static inline uint8 *S9xGetSampleAddress (int sample_number) {
-  uint32 addr = (((((APU->DSP))[APU_DIR] << 8) + (sample_number << 2)) & 0xffff);
-  return (((IAPU->RAM)) + addr);
+  uint32 addr = (((((APUPack.APU.DSP))[APU_DIR] << 8) + (sample_number << 2)) & 0xffff);
+  return ((APUPack.IAPU.RAM) + addr);
 }
 
 void S9xAPUSetEndOfSample (int i, Channel *ch) {
-	ch->state = SOUND_SILENT;
+  ch->state = SOUND_SILENT;
   ch->mode = MODE_NONE;
-  ((APU->DSP)) [APU_ENDX] |= 1 << i;
-  ((APU->DSP)) [APU_KON] &= ~(1 << i);
-  ((APU->DSP)) [APU_KOFF] &= ~(1 << i);
-  ((APU->KeyedChannels)) &= ~(1 << i);
+  APUPack.APU.DSP[APU_ENDX] |= 1 << i;
+  APUPack.APU.DSP[APU_KON] &= ~(1 << i);
+  APUPack.APU.DSP[APU_KOFF] &= ~(1 << i);
+  APUPack.APU.KeyedChannels &= ~(1 << i);
 }
 
 
 void S9xAPUSetEndX (int ch) {
-	((APU->DSP)) [APU_ENDX] |= 1 << ch;
+	APUPack.APU.DSP[APU_ENDX] |= 1 << ch;
 }
 
-static int steps [] = {
+static int __attribute__((aligned(64))) steps [16] = {
 		//	0, 64, 1238, 1238, 256, 1, 64, 109, 64, 1238
 		0, 64, 619, 619, 128, 1, 64, 55, 64, 619
 	};
@@ -235,7 +209,7 @@ void S9xSetEnvRate (Channel *ch, unsigned long rate, int direction, int target) 
 
 	ch->envx_target = target;
 	
-	if (rate == ~0UL) {
+	if (rate == 0xFFFF) {
 		ch->direction = 0;
 		rate = 0;
   } else ch->direction = direction;
@@ -243,8 +217,8 @@ void S9xSetEnvRate (Channel *ch, unsigned long rate, int direction, int target) 
 	
 	
 
-  if (rate == 0 || so->playback_rate == 0)	ch->erate = 0;
-  else ch->erate = (unsigned long)  (((int64) FIXED_POINT * 1000 * steps [ch->state]) / (rate * so->playback_rate));
+  if (rate == 0 || stSoundStatus.playback_rate == 0)	ch->erate = 0;
+  else ch->erate = (unsigned long)  (((int64) FIXED_POINT * 1000 * steps [ch->state]) / (rate * stSoundStatus.playback_rate));
 
 
 }
@@ -265,17 +239,19 @@ void S9xSetSoundVolume (int channel, short volume_left, short volume_right) {
 }
 
 void S9xSetMasterVolume (short volume_left, short volume_right) {
-	if ((Settings.DisableMasterVolume) || SNESGameFixes.EchoOnlyOutput) {
+	// Settings.DisableMasterVolume and SNESGameFixes.EchoOnlyOutput are always false
+	// (SNESGameFixes.EchoOnlyOutput doesn't initialize it(indefinite) 
+/*	if ((Settings.DisableMasterVolume) || SNESGameFixes.EchoOnlyOutput) {
 		SoundData.master_volume_left = 127;
 		SoundData.master_volume_right = 127;
 		SoundData.master_volume [0] = SoundData.master_volume [1] = 127;
   } else {
-		
+*/		
 		SoundData.master_volume_left = volume_left;
 		SoundData.master_volume_right = volume_right;
 		SoundData.master_volume [0] = volume_left;
 		SoundData.master_volume [1] = volume_right;
-	}
+//	}
 }
 
 void S9xSetEchoVolume (short volume_left, short volume_right) {
@@ -288,11 +264,11 @@ void S9xSetEchoVolume (short volume_left, short volume_right) {
 
 void S9xSetEchoEnable (uint8 byte) {
 	SoundData.echo_channel_enable = byte;
-  if (!SoundData.echo_write_enabled || (Settings.DisableSoundEcho))
+  if (!SoundData.echo_write_enabled/* || (Settings.DisableSoundEcho)*/)
 	byte = 0;
   if (byte && !SoundData.echo_enable) {
 		memset (Echo, 0, sizeof (Echo));
-		memset (Loop, 0, sizeof (Loop));
+		memset (stSoundux.Loop, 0, sizeof (stSoundux.Loop));
   }
 	
   SoundData.echo_enable = byte;
@@ -310,7 +286,7 @@ void S9xSetEchoFeedback (int feedback) {
 void S9xSetEchoDelay (int delay) {
 	
 
-	SoundData.echo_buffer_size = (512 * delay * (so->playback_rate)) / 32000;	
+	SoundData.echo_buffer_size = (512 * delay * (stSoundStatus.playback_rate)) / 32000;	
   
 		SoundData.echo_buffer_size <<= 1;
 
@@ -322,14 +298,14 @@ void S9xSetEchoDelay (int delay) {
 
 	if (SoundData.echo_buffer_size) SoundData.echo_ptr %= SoundData.echo_buffer_size;
 	else SoundData.echo_ptr = 0;
-	S9xSetEchoEnable (((APU->DSP)) [APU_EON]);
+	S9xSetEchoEnable (APUPack.APU.DSP[APU_EON]);
 	
 	
 }
 
 void S9xSetEchoWriteEnable (uint8 byte) {
 	SoundData.echo_write_enabled = byte;
-	S9xSetEchoDelay (((APU->DSP)) [APU_EDL] & 15);
+	S9xSetEchoDelay (APUPack.APU.DSP[APU_EDL] & 15);
 }
 
 void S9xSetFrequencyModulationEnable (uint8 byte) {
@@ -347,19 +323,19 @@ void S9xSetSoundKeyOff (int channel) {
 }
 
 void S9xFixSoundAfterSnapshotLoad () {
-	SoundData.echo_write_enabled = !(((APU->DSP)) [APU_FLG] & 0x20);
-	SoundData.echo_channel_enable = ((APU->DSP)) [APU_EON];
-  S9xSetEchoDelay (((APU->DSP)) [APU_EDL] & 0xf);
-  S9xSetEchoFeedback ((signed char) ((APU->DSP)) [APU_EFB]);
+  SoundData.echo_write_enabled = !(APUPack.APU.DSP[APU_FLG] & 0x20);
+  SoundData.echo_channel_enable = APUPack.APU.DSP[APU_EON];
+  S9xSetEchoDelay (APUPack.APU.DSP[APU_EDL] & 0xf);
+  S9xSetEchoFeedback ((signed char) APUPack.APU.DSP[APU_EFB]);
 	
-  S9xSetFilterCoefficient (0, (signed char) ((APU->DSP)) [APU_C0]);
-  S9xSetFilterCoefficient (1, (signed char) ((APU->DSP)) [APU_C1]);
-  S9xSetFilterCoefficient (2, (signed char) ((APU->DSP)) [APU_C2]);
-  S9xSetFilterCoefficient (3, (signed char) ((APU->DSP)) [APU_C3]);
-  S9xSetFilterCoefficient (4, (signed char) ((APU->DSP)) [APU_C4]);
-  S9xSetFilterCoefficient (5, (signed char) ((APU->DSP)) [APU_C5]);
-  S9xSetFilterCoefficient (6, (signed char) ((APU->DSP)) [APU_C6]);
-  S9xSetFilterCoefficient (7, (signed char) ((APU->DSP)) [APU_C7]);
+  S9xSetFilterCoefficient (0, (signed char) APUPack.APU.DSP[APU_C0]);
+  S9xSetFilterCoefficient (1, (signed char) APUPack.APU.DSP[APU_C1]);
+  S9xSetFilterCoefficient (2, (signed char) APUPack.APU.DSP[APU_C2]);
+  S9xSetFilterCoefficient (3, (signed char) APUPack.APU.DSP[APU_C3]);
+  S9xSetFilterCoefficient (4, (signed char) APUPack.APU.DSP[APU_C4]);
+  S9xSetFilterCoefficient (5, (signed char) APUPack.APU.DSP[APU_C5]);
+  S9xSetFilterCoefficient (6, (signed char) APUPack.APU.DSP[APU_C6]);
+  S9xSetFilterCoefficient (7, (signed char) APUPack.APU.DSP[APU_C7]);
   for (int i = 0; i < 8; i++) {
 		SoundData.channels[i].needs_decode = TRUE;
 		S9xSetSoundFrequency (i, SoundData.channels[i].hertz);
@@ -368,26 +344,24 @@ void S9xFixSoundAfterSnapshotLoad () {
 		SoundData.channels [i].interpolate = 0;
 		SoundData.channels [i].previous [0] = (int32) SoundData.channels [i].previous16 [0];
 		SoundData.channels [i].previous [1] = (int32) SoundData.channels [i].previous16 [1];
-	}
+  }
   SoundData.master_volume [0] = SoundData.master_volume_left;
   SoundData.master_volume [1] = SoundData.master_volume_right;
   SoundData.echo_volume [0] = SoundData.echo_volume_left;
   SoundData.echo_volume [1] = SoundData.echo_volume_right;
-  ((IAPU->Scanline)) = 0;
-  
- 
+//  APUPack.IAPU.Scanline = 0;
 }
 
 void S9xSetFilterCoefficient (int tap, int value) {
-	FilterTaps [tap & 7] = value;
-  SoundData.no_filter = (FilterTaps [0] == 127 || FilterTaps [0] == 0) && 
-	FilterTaps [1] == 0   &&
-	FilterTaps [2] == 0   &&
-	FilterTaps [3] == 0   &&
-	FilterTaps [4] == 0   &&
-	FilterTaps [5] == 0   &&
-	FilterTaps [6] == 0   &&
-	FilterTaps [7] == 0;
+	stSoundux.FilterTaps [tap & 7] = value;
+  SoundData.no_filter = (stSoundux.FilterTaps [0] == 127 || stSoundux.FilterTaps [0] == 0) && 
+	stSoundux.FilterTaps [1] == 0   &&
+	stSoundux.FilterTaps [2] == 0   &&
+	stSoundux.FilterTaps [3] == 0   &&
+	stSoundux.FilterTaps [4] == 0   &&
+	stSoundux.FilterTaps [5] == 0   &&
+	stSoundux.FilterTaps [6] == 0   &&
+	stSoundux.FilterTaps [7] == 0;
 }
 
 void S9xSetSoundADSR (int channel, int attack_rate, int decay_rate, int sustain_rate, int sustain_level, int release_rate) {
@@ -426,8 +400,7 @@ void S9xSetEnvelopeHeight (int channel, int level) {
 }
 
 int S9xGetEnvelopeHeight (int channel) {
-	if (((Settings.SoundEnvelopeHeightReading) ||
-		SNESGameFixes.SoundEnvelopeHeightReading2) &&
+	if (/*((Settings.SoundEnvelopeHeightReading) || SNESGameFixes.SoundEnvelopeHeightReading2) &&*/
     SoundData.channels[channel].state != SOUND_SILENT &&
     SoundData.channels[channel].state != SOUND_GAIN) return (SoundData.channels[channel].envx);
     
@@ -469,11 +442,11 @@ void S9xSetSoundSample (int channel, uint16 sample_number)
 
 void S9xSetSoundFrequency (int channel, int hertz) {
 	
-	if ((so->playback_rate)) {
-		if (SoundData.channels[channel].type == SOUND_NOISE) hertz = NoiseFreq [((APU->DSP)) [APU_FLG] & 0x1f];
-		SoundData.channels[channel].frequency = (int)(((int64) hertz * FIXED_POINT) / (so->playback_rate));
+	if ((stSoundStatus.playback_rate)) {
+		if (SoundData.channels[channel].type == SOUND_NOISE) hertz = NoiseFreq [APUPack.APU.DSP[APU_FLG] & 0x1f];
+		SoundData.channels[channel].frequency = (int)(((int64) hertz * FIXED_POINT) / (stSoundStatus.playback_rate));
 		//if ((Settings.FixFrequency)) SoundData.channels[channel].frequency = (unsigned long) ((float)SoundData.channels[channel].frequency * 0.980);		
-		if ((Settings.FixFrequency)) SoundData.channels[channel].frequency = (unsigned long) (SoundData.channels[channel].frequency * 2007 >> 11 /*0.98*/);
+		/*if ((Settings.FixFrequency)) */SoundData.channels[channel].frequency = (unsigned long) (SoundData.channels[channel].frequency * 2007 >> 11 /*0.98*/);
   }
 
 
@@ -489,11 +462,11 @@ void S9xSetSoundType (int channel, int type_of_sound) {
 }
 
 bool8 S9xSetSoundMute (bool8 mute) {
-	bool8 old = (so->mute_sound);
-	(so->mute_sound) = mute;
+	bool8 old = (stSoundStatus.mute_sound);
+	(stSoundStatus.mute_sound) = mute;
 	return (old);
 }
-
+/*
 void AltDecodeBlock (Channel *ch) {
 	if (ch->block_pointer >= 0x10000 - 9) {
 		ch->last_block = TRUE;
@@ -502,7 +475,7 @@ void AltDecodeBlock (Channel *ch) {
 		memset ((void *) ch->decoded, 0, sizeof (int16) * 16);
 		return;
   }
-  signed char *compressed = (signed char *) &((IAPU->RAM)) [ch->block_pointer];
+  signed char *compressed = (signed char *) &(APUPack.IAPU.RAM) [ch->block_pointer];
 	
   unsigned char filter = *compressed;
   if ((ch->last_block = filter & 1)) ch->loop = (filter & 2) != 0;
@@ -616,7 +589,7 @@ void AltDecodeBlock2 (Channel *ch) {
 		return;
   }
 	
-  signed char *compressed = (signed char *) &((IAPU->RAM)) [ch->block_pointer];
+  signed char *compressed = (signed char *) &APUPack.IAPU.RAM [ch->block_pointer];
 	
   filter = *compressed;
   if ((ch->last_block = filter & 1)) ch->loop = (filter & 2) != 0;
@@ -736,7 +709,7 @@ void AltDecodeBlock2 (Channel *ch) {
   ch->previous [1] = prev1;
   ch->block_pointer += 9;
 }
-
+*/
 void DecodeBlock (Channel *ch) {
 	int32 out;
   unsigned char filter;
@@ -744,19 +717,20 @@ void DecodeBlock (Channel *ch) {
   signed char sample1, sample2;
   unsigned char i;
   bool invalid_header;
-	
+  // Settings.AltSampleDecode is always 0.
+  /*
   if ((Settings.AltSampleDecode)) {
 		if ((Settings.AltSampleDecode) < 3) AltDecodeBlock (ch);
 		else AltDecodeBlock2 (ch);
 		return;
-	}
+  }*/
 	if (ch->block_pointer > 0x10000 - 9) {
 		ch->last_block = TRUE;
 		ch->loop = FALSE;
 		ch->block = ch->decoded;
 		return;
 	}
-  signed char *compressed = (signed char *) &((IAPU->RAM)) [ch->block_pointer];
+  signed char *compressed = (signed char *) &(APUPack.IAPU.RAM) [ch->block_pointer];
 	
   filter = *compressed;
   if ((ch->last_block = filter & 1)) ch->loop = (filter & 2) != 0;			
@@ -826,14 +800,14 @@ void DecodeBlock (Channel *ch) {
 
 
 void MixStereo (int sample_count) {				
-  int pitch_mod = SoundData.pitch_mod & ~((APU->DSP))[APU_NON];
+  int pitch_mod = SoundData.pitch_mod & ~((APUPack.APU.DSP))[APU_NON];
 	
   for (uint32 J = 0; J < NUM_CHANNELS; J++)  {
 		int32 VL, VR;
 		Channel *ch = &SoundData.channels[J];
 		unsigned long freq0 = ch->frequency;
 		
-		if (ch->state == SOUND_SILENT || !((so->sound_switch) & (1 << J))) continue;
+		if (ch->state == SOUND_SILENT || !((stSoundStatus.sound_switch) & (1 << J))) continue;
 	
 		freq0 = (unsigned long) (( freq0 * 2017)>>11 /*0.985*/);//uncommented by jonathan gevaryahu, as it is necessary for most cards in linux
 		
@@ -850,12 +824,12 @@ void MixStereo (int sample_count) {
 			ch->next_sample=ch->block[ch->sample_pointer];
 			ch->interpolate = 0;
 			  
-			if ((Settings.InterpolatedSound) && freq0 < FIXED_POINT && !mod)
+			if (/*(Settings.InterpolatedSound) &&  */freq0 < FIXED_POINT && !mod)
 			   ch->interpolate = ((ch->next_sample - ch->sample) * 
 			   (long) freq0) / (long) FIXED_POINT;
 		}
 		
-    VL = ((ch->sample * ch-> left_vol_level) >> 7);
+        VL = ((ch->sample * ch-> left_vol_level) >> 7);
 		VR = ((ch->sample * ch->right_vol_level) >> 7);
 		
 		for (uint32 I = 0; I < (uint32) sample_count; I += 2) {
@@ -1023,16 +997,18 @@ void MixStereo (int sample_count) {
 						DecodeBlock (ch);
 					} while (ch->sample_pointer >= SOUND_DECODE_LENGTH);
 					if (!JUST_PLAYED_LAST_SAMPLE (ch)) ch->next_sample = ch->block [ch->sample_pointer];
-				} else ch->next_sample = ch->block [ch->sample_pointer];
+				} else {
+					ch->next_sample = ch->block [ch->sample_pointer];
+				}
 				
 				if (ch->type == SOUND_SAMPLE) {
-					if ((Settings.InterpolatedSound) && freq < FIXED_POINT && !mod) {
+					if (/*(Settings.InterpolatedSound) && */freq < FIXED_POINT && !mod) {
 						ch->interpolate = ((ch->next_sample - ch->sample) * (long) freq) / (long) FIXED_POINT;
 						ch->sample = (int16) (ch->sample + (((ch->next_sample - ch->sample) *  (long) (ch->count)) / (long) FIXED_POINT));
 					} else ch->interpolate = 0;
 				} else {
-					for (;VL > 0; VL--) if (((so->noise_gen) <<= 1) & 0x80000000L) (so->noise_gen) ^= 0x0040001L;
-					ch->sample = ((so->noise_gen) << 17) >> 17;
+					for (;VL > 0; VL--) if (((stSoundStatus.noise_gen) <<= 1) & 0x80000000L) (stSoundStatus.noise_gen) ^= 0x0040001L;
+					ch->sample = ((stSoundStatus.noise_gen) << 17) >> 17;
 					ch->interpolate = 0;
 				}
 							
@@ -1048,7 +1024,6 @@ void MixStereo (int sample_count) {
 					VR = (ch->sample * ch->right_vol_level) / 128;
 				}
 			}
-		
 			if (pitch_mod & (1 << (J + 1))) wave [I >> 1] = ch->sample * ch->envx;
 		
 			MixBuffer [I ] += VL;
@@ -1064,7 +1039,6 @@ stereo_exit: ;
 
 void S9xResetSound (bool8 full)
 {
-	
 	memset(Echo,0,24000*4);
 	memset(DummyEchoBuffer,0,SOUND_BUFFER_SIZE*4);
 	memset(MixBuffer,0,SOUND_BUFFER_SIZE*4);
@@ -1098,20 +1072,20 @@ void S9xResetSound (bool8 full)
 		SoundData.echo_feedback = 0;
 		SoundData.echo_buffer_size = 1;
     }
-    FilterTaps [0] = 127;
-    FilterTaps [1] = 0;
-    FilterTaps [2] = 0;
-    FilterTaps [3] = 0;
-    FilterTaps [4] = 0;
-    FilterTaps [5] = 0;
-    FilterTaps [6] = 0;
-    FilterTaps [7] = 0;
-    (so->mute_sound) = TRUE;
-    (so->noise_gen) = 1;
-    (so->sound_switch) = 255;
-    (so->samples_mixed_so_far) = 0;
-    (so->play_position) = 0;
-    (so->err_counter) = 0;
+    stSoundux.FilterTaps [0] = 127;
+    stSoundux.FilterTaps [1] = 0;
+    stSoundux.FilterTaps [2] = 0;
+    stSoundux.FilterTaps [3] = 0;
+    stSoundux.FilterTaps [4] = 0;
+    stSoundux.FilterTaps [5] = 0;
+    stSoundux.FilterTaps [6] = 0;
+    stSoundux.FilterTaps [7] = 0;
+    stSoundStatus.mute_sound = TRUE;
+    stSoundStatus.noise_gen = 1;
+    stSoundStatus.sound_switch = 255;
+    stSoundStatus.samples_mixed_so_far = 0;
+    stSoundStatus.play_position = 0;
+    stSoundStatus.err_counter = 0;
 	
     if (full)
     {
@@ -1146,45 +1120,27 @@ void S9xResetSound (bool8 full)
 void S9xSetPlaybackRate (uint32 playback_rate)
 {
 	
-    (so->playback_rate) = playback_rate;
+    stSoundStatus.playback_rate = playback_rate;
     //(so->err_rate) = (uint32) (SNES_SCANLINE_TIME * FIXED_POINT / (1.0 / (double) (so->playback_rate)));
 
-    S9xSetEchoDelay (((APU->DSP)) [APU_EDL] & 0xf);
+    S9xSetEchoDelay (APUPack.APU.DSP[APU_EDL] & 0xf);
     for (int i = 0; i < 8; i++)
 		S9xSetSoundFrequency (i, SoundData.channels [i].hertz);
 
 }
 
-void S9xAllocSound () {
-	Echo=(int*)malloc(24000*4);
-	DummyEchoBuffer=(int*)malloc(SOUND_BUFFER_SIZE*4);
-	MixBuffer=(int*)malloc(SOUND_BUFFER_SIZE*4);
-	EchoBuffer=(int*)malloc(SOUND_BUFFER_SIZE*4);
-	wave=(int*)malloc(SOUND_BUFFER_SIZE*4);
-}
-
-void S9xFreeSound () {
-	free(Echo);
-	free(DummyEchoBuffer);
-	free(MixBuffer);
-	free(EchoBuffer);
-	free(wave);
-}
-
 bool8 S9xInitSound (int mode, bool8 stereo, int buffer_size)
 {
 	
+    stSoundStatus.sound_fd = -1;
+    stSoundStatus.sound_switch = 255;
 	
-    (so->sound_fd) = -1;
-    (so->sound_switch) = 255;
-	
+    stSoundStatus.playback_rate = 0;
 
-    (so->playback_rate) = 0;
-
-    (so->buffer_size) = 0;
+    stSoundStatus.buffer_size = 0;
     
     
-    (so->encoded) = FALSE;
+    stSoundStatus.encoded = FALSE;
     
     S9xResetSound (TRUE);
 	
@@ -1256,7 +1212,7 @@ bool8 S9xSetSoundMode (int channel, int mode)
 
 void S9xSetSoundControl (int sound_switch)
 {
-    (so->sound_switch) = sound_switch;
+    stSoundStatus.sound_switch = sound_switch;
 }
 
 void S9xPlaySample (int channel)
@@ -1269,12 +1225,12 @@ void S9xPlaySample (int channel)
     ch->envxx = 0;
 	
     S9xFixEnvelope (channel,
-		((APU->DSP)) [APU_GAIN  + (channel << 4)], 
-		((APU->DSP)) [APU_ADSR1 + (channel << 4)],
-		((APU->DSP)) [APU_ADSR2 + (channel << 4)]);
+		APUPack.APU.DSP[APU_GAIN  + (channel << 4)], 
+		APUPack.APU.DSP[APU_ADSR1 + (channel << 4)],
+		APUPack.APU.DSP[APU_ADSR2 + (channel << 4)]);
 	
-    ch->sample_number = ((APU->DSP)) [APU_SRCN + channel * 0x10];
-    if (((APU->DSP)) [APU_NON] & (1 << channel))
+    ch->sample_number = APUPack.APU.DSP[APU_SRCN + channel * 0x10];
+    if (APUPack.APU.DSP[APU_NON] & (1 << channel))
 		ch->type = SOUND_NOISE;
     else
 		ch->type = SOUND_SAMPLE;
@@ -1308,8 +1264,6 @@ void S9xPlaySample (int channel)
 				S9xSetEnvRate (ch, ch->decay_rate, -1, 
 					(MAX_ENVELOPE_HEIGHT * ch->sustain_level) >> 3);
 			}
-			//ch-> left_vol_level = (ch->envx * ch->volume_left) / 128;
-			//ch->right_vol_level = (ch->envx * ch->volume_right) / 128;
 			ch-> left_vol_level = ((ch->envx * ch->volume_left) >> 7);
     		ch->right_vol_level = ((ch->envx * ch->volume_right) >> 7);
 		}
@@ -1349,9 +1303,9 @@ void S9xPlaySample (int channel)
     }
 	
     S9xFixEnvelope (channel,
-		((APU->DSP)) [APU_GAIN  + (channel << 4)], 
-		((APU->DSP)) [APU_ADSR1 + (channel << 4)],
-		((APU->DSP)) [APU_ADSR2 + (channel << 4)]);
+		APUPack.APU.DSP[APU_GAIN  + (channel << 4)], 
+		APUPack.APU.DSP[APU_ADSR1 + (channel << 4)],
+		APUPack.APU.DSP[APU_ADSR2 + (channel << 4)]);
 }
 
 
@@ -1360,15 +1314,13 @@ void S9xMixSamples (uint8 *buffer, int sample_count)
     int J;
     int I;
 
-    if (!(so->mute_sound))
+    if (!(stSoundStatus.mute_sound))
     {    	    	
-			memset (MixBuffer, 0, sample_count * 4);
+		memset (MixBuffer, 0, sample_count * 4);
 	
-			if (SoundData.echo_enable) memset (EchoBuffer, 0, sample_count * 4);
+		if (SoundData.echo_enable) memset (EchoBuffer, 0, sample_count * 4);
 
 		MixStereo (sample_count);
-		
-		
     }
 
     /* Mix and convert waveforms */
@@ -1380,7 +1332,7 @@ void S9xMixSamples (uint8 *buffer, int sample_count)
 
 		
 		// 16-bit sound
-		if ((so->mute_sound))
+		if ((stSoundStatus.mute_sound))
 		{
             memset (buffer, 0, byte_count);
 		}
@@ -1415,29 +1367,23 @@ void S9xMixSamples (uint8 *buffer, int sample_count)
 					else
 					{
 						// ... with filter defined.
-						
-						
-						
 						for (J = 0; J < sample_count; J++)
 						{
 							int E = Echo [SoundData.echo_ptr];
 							
-							Loop [(Z - 0) & 15] = E;
-							E =  E                    * FilterTaps [0];
-							E += Loop [(Z -  2) & 15] * FilterTaps [1];
-							E += Loop [(Z -  4) & 15] * FilterTaps [2];
-							E += Loop [(Z -  6) & 15] * FilterTaps [3];
-							E += Loop [(Z -  8) & 15] * FilterTaps [4];
-							E += Loop [(Z - 10) & 15] * FilterTaps [5];
-							E += Loop [(Z - 12) & 15] * FilterTaps [6];
-							E += Loop [(Z - 14) & 15] * FilterTaps [7];
+							stSoundux.Loop [(stSoundux.Z - 0) & 15] = E;
+							E =  E                    * stSoundux.FilterTaps [0];
+							E += stSoundux.Loop [(stSoundux.Z -  2) & 15] * stSoundux.FilterTaps [1];
+							E += stSoundux.Loop [(stSoundux.Z -  4) & 15] * stSoundux.FilterTaps [2];
+							E += stSoundux.Loop [(stSoundux.Z -  6) & 15] * stSoundux.FilterTaps [3];
+							E += stSoundux.Loop [(stSoundux.Z -  8) & 15] * stSoundux.FilterTaps [4];
+							E += stSoundux.Loop [(stSoundux.Z - 10) & 15] * stSoundux.FilterTaps [5];
+							E += stSoundux.Loop [(stSoundux.Z - 12) & 15] * stSoundux.FilterTaps [6];
+							E += stSoundux.Loop [(stSoundux.Z - 14) & 15] * stSoundux.FilterTaps [7];
 							E /= 128;
-							Z++;
+							stSoundux.Z++;
 							
-							//Echo [SoundData.echo_ptr] = (E * SoundData.echo_feedback) / 128 +
-							//	EchoBuffer [J];
-							Echo [SoundData.echo_ptr] = ((E * SoundData.echo_feedback) >> 7) +
-								EchoBuffer [J];
+							Echo [SoundData.echo_ptr] = ((E * SoundData.echo_feedback) >> 7) + EchoBuffer [J];
 							
 							if ((SoundData.echo_ptr += 1) >= SoundData.echo_buffer_size)
 								SoundData.echo_ptr = 0;
@@ -1466,6 +1412,4 @@ void S9xMixSamples (uint8 *buffer, int sample_count)
 			}
 		}
     }
-
-	
 }

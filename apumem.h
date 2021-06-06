@@ -97,63 +97,63 @@ END_EXTERN_C
 
 INLINE uint8 S9xAPUGetByteZ (uint8 Address)
 {
-    if (Address >= 0xf0 && ((IAPU->DirectPage)) == ((IAPU->RAM)))
+    if (Address >= 0xf0 && APUPack.IAPU.DirectPage == APUPack.IAPU.RAM)
     {
 	if (Address >= 0xf4 && Address <= 0xf7)
 	{
 #ifdef SPC700_SHUTDOWN
-	    ((IAPU->WaitAddress2)) = ((IAPU->WaitAddress1));
-	    ((IAPU->WaitAddress1)) = ((IAPU->PC));
+	    APUPack.IAPU.WaitAddress2 = APUPack.IAPU.WaitAddress1;
+	    APUPack.IAPU.WaitAddress1 = APUPack.IAPU.PC;
 #endif	    
-	    return (((IAPU->RAM)) [Address]);
+	    return (APUPack.IAPU.RAM [Address]);
 	}
 	if (Address >= 0xfd)
 	{
 #ifdef SPC700_SHUTDOWN
-	    ((IAPU->WaitAddress2)) = ((IAPU->WaitAddress1));
-	    ((IAPU->WaitAddress1)) = ((IAPU->PC));
+	    APUPack.IAPU.WaitAddress2 = APUPack.IAPU.WaitAddress1;
+	    APUPack.IAPU.WaitAddress1 = APUPack.IAPU.PC;
 #endif	    
-	    uint8 t = ((IAPU->RAM)) [Address];
-	    ((IAPU->RAM)) [Address] = 0;
+	    uint8 t = APUPack.IAPU.RAM [Address];
+	    APUPack.IAPU.RAM [Address] = 0;
 	    return (t);
 	}
 	else
 	if (Address == 0xf3)
 	    return (S9xGetAPUDSP ());
 
-	return (((IAPU->RAM)) [Address]);
+	return (APUPack.IAPU.RAM [Address]);
     }
     else
-	return (((IAPU->DirectPage)) [Address]);
+	return (APUPack.IAPU.DirectPage [Address]);
 }
 
 INLINE void S9xAPUSetByteZ (uint8 byte, uint8 Address)
 {
-    if (Address >= 0xf0 && ((IAPU->DirectPage)) == ((IAPU->RAM)))
+    if (Address >= 0xf0 && APUPack.IAPU.DirectPage == APUPack.IAPU.RAM)
     {
 	if (Address == 0xf3)
 	    S9xSetAPUDSP (byte);
 	else
 	if (Address >= 0xf4 && Address <= 0xf7)
-	    ((APU->OutPorts)) [Address - 0xf4] = byte;
+	    APUPack.APU.OutPorts [Address - 0xf4] = byte;
 	else
 	if (Address == 0xf1)
 	    S9xSetAPUControl (byte);
 	else
 	if (Address < 0xfd)
 	{
-	    ((IAPU->RAM)) [Address] = byte;
+	    APUPack.IAPU.RAM [Address] = byte;
 	    if (Address >= 0xfa)
 	    {
 		if (byte == 0)
-		    ((APU->TimerTarget)) [Address - 0xfa] = 0x100;
+		    APUPack.APU.TimerTarget [Address - 0xfa] = 0x100;
 		else
-		    ((APU->TimerTarget)) [Address - 0xfa] = byte;
+		    APUPack.APU.TimerTarget [Address - 0xfa] = byte;
 	    }
 	}
     }
     else
-	((IAPU->DirectPage)) [Address] = byte;
+	APUPack.IAPU.DirectPage [Address] = byte;
 }
 
 INLINE uint8 S9xAPUGetByte (uint32 Address)
@@ -165,10 +165,10 @@ INLINE uint8 S9xAPUGetByte (uint32 Address)
 	if (Address >= 0xf4 && Address <= 0xf7)
 	{
 #ifdef SPC700_SHUTDOWN
-	    ((IAPU->WaitAddress2)) = ((IAPU->WaitAddress1));
-	    ((IAPU->WaitAddress1)) = ((IAPU->PC));
+	    APUPack.IAPU.WaitAddress2 = APUPack.IAPU.WaitAddress1;
+	    APUPack.IAPU.WaitAddress1 = APUPack.IAPU.PC;
 #endif	    
-	    return (((IAPU->RAM)) [Address]);
+	    return (APUPack.IAPU.RAM [Address]);
 	}
 	else
 	if (Address == 0xf3)
@@ -176,17 +176,17 @@ INLINE uint8 S9xAPUGetByte (uint32 Address)
 	if (Address >= 0xfd)
 	{
 #ifdef SPC700_SHUTDOWN
-	    ((IAPU->WaitAddress2)) = ((IAPU->WaitAddress1));
-	    ((IAPU->WaitAddress1)) = ((IAPU->PC));
+	    APUPack.IAPU.WaitAddress2 = APUPack.IAPU.WaitAddress1;
+	    APUPack.IAPU.WaitAddress1 = APUPack.IAPU.PC;
 #endif
-	    uint8 t = ((IAPU->RAM)) [Address];
-	    ((IAPU->RAM)) [Address] = 0;
+	    uint8 t = APUPack.IAPU.RAM [Address];
+	    APUPack.IAPU.RAM [Address] = 0;
 	    return (t);
 	}
-	return (((IAPU->RAM)) [Address]);
+	return (APUPack.IAPU.RAM [Address]);
     }
     else
-	return (((IAPU->RAM)) [Address]);
+	return (APUPack.IAPU.RAM [Address]);
 }
 
 INLINE void S9xAPUSetByte (uint8 byte, uint32 Address)
@@ -199,32 +199,32 @@ INLINE void S9xAPUSetByte (uint8 byte, uint32 Address)
 	    S9xSetAPUDSP (byte);
 	else
 	if (Address >= 0xf4 && Address <= 0xf7)
-	    ((APU->OutPorts)) [Address - 0xf4] = byte;
+	    APUPack.APU.OutPorts [Address - 0xf4] = byte;
 	else
 	if (Address == 0xf1)
 	    S9xSetAPUControl (byte);
 	else
 	if (Address < 0xfd)
 	{
-	    ((IAPU->RAM)) [Address] = byte;
+	    APUPack.IAPU.RAM [Address] = byte;
 	    if (Address >= 0xfa)
 	    {
 		if (byte == 0)
-		    ((APU->TimerTarget)) [Address - 0xfa] = 0x100;
+		    APUPack.APU.TimerTarget [Address - 0xfa] = 0x100;
 		else
-		    ((APU->TimerTarget)) [Address - 0xfa] = byte;
+		    APUPack.APU.TimerTarget [Address - 0xfa] = byte;
 	    }
 	}
     }
     else
     {
 	if (Address < 0xffc0)
-	    ((IAPU->RAM)) [Address] = byte;
+	    APUPack.IAPU.RAM [Address] = byte;
 	else
 	{
-	    ((APU->ExtraRAM)) [Address - 0xffc0] = byte;
-	    if (!((APU->ShowROM)))
-		((IAPU->RAM)) [Address] = byte;
+	    APUPack.APU.ExtraRAM[Address - 0xffc0] = byte;
+	    if (!APUPack.APU.ShowROM)
+		APUPack.IAPU.RAM [Address] = byte;
 	}
     }
 }

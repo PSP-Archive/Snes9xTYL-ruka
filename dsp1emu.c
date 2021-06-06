@@ -36,8 +36,6 @@
 //#define debug06
 
 #define __OPT__
-#define __OPT02__
-#define __OPT06__
 
 #ifdef DebugDSP1
 
@@ -60,7 +58,7 @@ void Log_Message (char *Message, ...)
 
 #endif
 
-const unsigned short DSP1ROM[1024] = {
+const unsigned short  __attribute__((aligned(64))) DSP1ROM[1024] = {
 	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	
 	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	
 	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	0x0000,	
@@ -248,39 +246,6 @@ void InitDSP(void)
 #endif
 }
 
-
-short Op00Multiplicand;
-short Op00Multiplier;
-short Op00Result;
-
-void DSPOp00()
-{
-   Op00Result= Op00Multiplicand * Op00Multiplier >> 15;
-
-   #ifdef DebugDSP1
-      Log_Message("OP00 MULT %d*%d/32768=%d",Op00Multiplicand,Op00Multiplier,Op00Result);
-   #endif
-}
-
-short Op20Multiplicand;
-short Op20Multiplier;
-short Op20Result;
-
-void DSPOp20()
-{
-   Op20Result= Op20Multiplicand * Op20Multiplier >> 15;
-   Op20Result++;
-
-   #ifdef DebugDSP1
-      Log_Message("OP20 MULT %d*%d/32768=%d",Op20Multiplicand,Op20Multiplier,Op20Result);
-   #endif
-}
-
-signed short Op10Coefficient;
-signed short Op10Exponent;
-signed short Op10CoefficientR;
-signed short Op10ExponentR;
-
 void DSP1_Inverse(short Coefficient, short Exponent, short *iCoefficient, short *iExponent)
 {
 	// Step One: Division by Zero
@@ -329,21 +294,7 @@ void DSP1_Inverse(short Coefficient, short Exponent, short *iCoefficient, short 
 		*iExponent = 1 - Exponent;
 	}
 }
-
-void DSPOp10()
-{
-	DSP1_Inverse(Op10Coefficient, Op10Exponent, &Op10CoefficientR, &Op10ExponentR);
-	#ifdef DebugDSP1
-        Log_Message("OP10 INV %d*2^%d = %d*2^%d", Op10Coefficient, Op10Exponent, Op10CoefficientR, Op10ExponentR);
-	#endif
-}
-
-short Op04Angle;
-short Op04Radius;
-short Op04Sin;
-short Op04Cos;
-
-const short DSP1_MulTable[256] = {
+const short __attribute__((aligned(64))) DSP1_MulTable[256] = {
 	  0x0000,  0x0003,  0x0006,  0x0009,  0x000c,  0x000f,  0x0012,  0x0015,
 	  0x0019,  0x001c,  0x001f,  0x0022,  0x0025,  0x0028,  0x002b,  0x002f,
 	  0x0032,  0x0035,  0x0038,  0x003b,  0x003e,  0x0041,  0x0045,  0x0048,
@@ -377,7 +328,7 @@ const short DSP1_MulTable[256] = {
 	  0x02f1,  0x02f5,  0x02f8,  0x02fb,  0x02fe,  0x0301,  0x0304,  0x0307,
 	  0x030b,  0x030e,  0x0311,  0x0314,  0x0317,  0x031a,  0x031d,  0x0321};
 
-const short DSP1_SinTable[256] = {
+const short __attribute__((aligned(64))) DSP1_SinTable[256] = {
 	  0x0000,  0x0324,  0x0647,  0x096a,  0x0c8b,  0x0fab,  0x12c8,  0x15e2,
 	  0x18f8,  0x1c0b,  0x1f19,  0x2223,  0x2528,  0x2826,  0x2b1f,  0x2e11,
 	  0x30fb,  0x33de,  0x36ba,  0x398c,  0x3c56,  0x3f17,  0x41ce,  0x447a,
@@ -508,90 +459,23 @@ void DSP1_Normalizefloat(int Product, short *Coefficient, short *Exponent)
 	*Exponent = e;
 }
 
-void DSPOp04()
-{
-	Op04Sin = DSP1_Sin(Op04Angle) * Op04Radius >> 15;
-	Op04Cos = DSP1_Cos(Op04Angle) * Op04Radius >> 15;
-}
-
-short Op0CA;
-short Op0CX1;
-short Op0CY1;
-short Op0CX2;
-short Op0CY2;
-
-void DSPOp0C()
-{
-	Op0CX2 = (Op0CY1 * DSP1_Sin(Op0CA) >> 15) + (Op0CX1 * DSP1_Cos(Op0CA) >> 15);
-	Op0CY2 = (Op0CY1 * DSP1_Cos(Op0CA) >> 15) - (Op0CX1 * DSP1_Sin(Op0CA) >> 15);
-}
-
-
-short Op02FX;
-short Op02FY;
-short Op02FZ;
-short Op02LFE;
-short Op02LES;
-unsigned short Op02AAS;
-unsigned short Op02AZS;
-unsigned short Op02VOF;
-unsigned short Op02VVA;
-
-short Op02CX;
-short Op02CY;
-float Op02CXF;
-float Op02CYF;
-float ViewerX0;
-float ViewerY0;
-float ViewerZ0;
-float ViewerX1;
-float ViewerY1;
-float ViewerZ1;
-float ViewerX;
-float ViewerY;
-float ViewerZ;
-int ViewerAX;
-int ViewerAY;
-int ViewerAZ;
-float NumberOfSlope;
-float ScreenX;
-float ScreenY;
-float ScreenZ;
-float TopLeftScreenX;
-float TopLeftScreenY;
-float TopLeftScreenZ;
-float BottomRightScreenX;
-float BottomRightScreenY;
-float BottomRightScreenZ;
-float Ready;
-float RasterLX;
-float RasterLY;
-float RasterLZ;
-float ScreenLX1;
-float ScreenLY1;
-float ScreenLZ1;
-int    ReversedLES;
-short Op02LESb;
-float NAzsB,NAasB;
-float ViewerXc;
-float ViewerYc;
-float ViewerZc;
-float CenterX,CenterY;
-short Op02CYSup,Op02CXSup;
-float CXdistance;
-
 #define VofAngle 0x3880
 
-short TValDebug,TValDebug2;
-short ScrDispl;
-
-
-#ifdef __OPT02__
-void DSPOp02()
+inline void DSPOp02()
 {
-	ViewerZ1=-Cos(Angle(Op02AZS));
-	ViewerX1=Sin(Angle(Op02AZS))*Sin(Angle(Op02AAS));
-	ViewerY1=Sin(Angle(Op02AZS))*Cos(Angle(Op02AAS));
+	DSP1.Op02FX = (short)DSP1.parameters16 [0];
+	DSP1.Op02FY = (short)DSP1.parameters16 [1];
+	DSP1.Op02FZ = (short)DSP1.parameters16 [2];
+	DSP1.Op02LFE = (short)DSP1.parameters16 [3];
+	DSP1.Op02LES = (short)DSP1.parameters16 [4];
+	DSP1.Op02AAS = (unsigned short)DSP1.parameters16 [5];
+	DSP1.Op02AZS = (unsigned short)DSP1.parameters16 [6];
+	float ViewerX1;
+	float ViewerY1;
+	float ViewerZ1;
+	ViewerZ1=-Cos(Angle(DSP1.Op02AZS));
+	ViewerX1=Sin(Angle(DSP1.Op02AZS))*Sin(Angle(DSP1.Op02AAS));
+	ViewerY1=Sin(Angle(DSP1.Op02AZS))*Cos(Angle(DSP1.Op02AAS));
 
 	
    #ifdef debug02
@@ -599,72 +483,72 @@ void DSPOp02()
                                                                    ViewerZ1);
    getch();
    #endif
-   ViewerX=Op02FX-ViewerX1*Op02LFE;
-   ViewerY=Op02FY-ViewerY1*Op02LFE;
-   ViewerZ=Op02FZ-ViewerZ1*Op02LFE;
-
-   ScreenX=Op02FX+ViewerX1*(Op02LES-Op02LFE);
-   ScreenY=Op02FY+ViewerY1*(Op02LES-Op02LFE);
-   ScreenZ=Op02FZ+ViewerZ1*(Op02LES-Op02LFE);
+	float ViewerX;
+	float ViewerY;
+	float ViewerZ;
+   ViewerX=DSP1.Op02FX-ViewerX1*DSP1.Op02LFE;
+   ViewerY=DSP1.Op02FY-ViewerY1*DSP1.Op02LFE;
+   ViewerZ=DSP1.Op02FZ-ViewerZ1*DSP1.Op02LFE;
 
    #ifdef debug02
+	float ScreenX;
+	float ScreenY;
+	float ScreenZ;
+   ScreenX=DSP1.Op02FX+ViewerX1*(DSP1.Op02LES-DSP1.Op02LFE);
+   ScreenY=DSP1.Op02FY+ViewerY1*(DSP1.Op02LES-DSP1.Op02LFE);
+   ScreenZ=DSP1.Op02FZ+ViewerZ1*(DSP1.Op02LES-DSP1.Op02LFE);
+
    printf("ViewerX : %f ViewerY : %f ViewerZ : %f\n",ViewerX,ViewerY,ViewerZ);
-   printf("Op02FX : %d Op02FY : %d Op02FZ : %d\n",Op02FX,Op02FY,Op02FZ);
+   printf("DSP1.Op02FX : %d DSP1.Op02FY : %d DSP1.Op02FZ : %d\n",DSP1.Op02FX,DSP1.Op02FY,DSP1.Op02FZ);
    printf("ScreenX : %f ScreenY : %f ScreenZ : %f\n",ScreenX,ScreenY,ScreenZ);
    getch();
    #endif
    if (ViewerZ1==0)ViewerZ1++;
-   NumberOfSlope=ViewerZ/-ViewerZ1;
+   float NumberOfSlope=ViewerZ/-ViewerZ1;
 
-   Op02CX=(short)(Op02CXF=ViewerX+ViewerX1*NumberOfSlope);
-   Op02CY=(short)(Op02CYF=ViewerY+ViewerY1*NumberOfSlope);
-
-   Op02VOF=0x0000;
-   ReversedLES=0;
-   Op02LESb=Op02LES;
-   if ((Op02LES>=VofAngle+16384.0) && (Op02LES<VofAngle+32768.0)) {
+   DSP1.Op02VOF=0x0000;
+   int ReversedLES=0;
+   short Op02LESb=DSP1.Op02LES;
+   if ((DSP1.Op02LES>=VofAngle+16384.0) && (DSP1.Op02LES<VofAngle+32768.0)) {
      ReversedLES=1;
-     Op02LESb=VofAngle+0x4000-(Op02LES-(VofAngle+0x4000));
+     Op02LESb=VofAngle+0x4000-(DSP1.Op02LES-(VofAngle+0x4000));
    }
-   Op02VVA = (short)(Op02LESb * tanf((Op02AZS-0x4000)*6.2832/65536.0));
+   DSP1.Op02VVA = (short)(Op02LESb * tanf((DSP1.Op02AZS-0x4000)*6.2832/65536.0));
    if ((Op02LESb>=VofAngle) && (Op02LESb<=VofAngle+0x4000)) {
-      Op02VOF= (short)(Op02LESb * tanf((Op02AZS-0x4000-VofAngle)*6.2832/65536.0));
-      Op02VVA-=Op02VOF;
+      DSP1.Op02VOF= (short)(Op02LESb * tanf((DSP1.Op02AZS-0x4000-VofAngle)*6.2832/65536.0));
+      DSP1.Op02VVA-=DSP1.Op02VOF;
    }
    if (ReversedLES){
-     Op02VOF=-Op02VOF;
+     DSP1.Op02VOF=-DSP1.Op02VOF;
    }
 
-   NAzsB = (Op02AZS-0x4000)*6.2832/65536.0;
-   NAasB = Op02AAS*6.2832/65536.0;
+   DSP1.NAzsB = (DSP1.Op02AZS-0x4000)*6.2832/65536.0;
+   DSP1.NAasB = DSP1.Op02AAS*6.2832/65536.0;
 
-   if (tanf(NAzsB)==0) NAzsB=0.1;
+   if (tanf(DSP1.NAzsB)==0) DSP1.NAzsB=0.1;
 
-   ScrDispl=0;
-   if (NAzsB>-0.15) {NAzsB=-0.15;ScrDispl=Op02VVA-0xFFDA;}
+   DSP1.ScrDispl=0;
+   if (DSP1.NAzsB>-0.15) {DSP1.NAzsB=-0.15;DSP1.ScrDispl=DSP1.Op02VVA-0xFFDA;}
 
-   CXdistance=1/tanf(NAzsB);
+   float CXdistance=1/tanf(DSP1.NAzsB);
 
-   ViewerXc=Op02FX;
-   ViewerYc=Op02FY;
-   ViewerZc=Op02FZ;
+   DSP1.ViewerXc=DSP1.Op02FX;
+   DSP1.ViewerYc=DSP1.Op02FY;
+   DSP1.ViewerZc=DSP1.Op02FZ;
 
-   CenterX = (-sinf(NAasB)*ViewerZc*CXdistance)+ViewerXc;
-   CenterY = (cosf(NAasB)*ViewerZc*CXdistance)+ViewerYc;
-   Op02CX = (short)CenterX;
-   Op02CY = (short)CenterY;
+   DSP1.CenterX = (-sinf(DSP1.NAasB)*DSP1.ViewerZc*CXdistance)+DSP1.ViewerXc;
+   DSP1.CenterY = (cosf(DSP1.NAasB)*DSP1.ViewerZc*CXdistance)+DSP1.ViewerYc;
+   short Op02CX = (short)DSP1.CenterX;
+   short Op02CY = (short)DSP1.CenterY;
 
-   ViewerXc=ViewerX;//-Op02FX);
-   ViewerYc=ViewerY;//-Op02FY);
-   ViewerZc=ViewerZ;//-Op02FZ);
+   DSP1.ViewerXc=ViewerX;//-DSP1.Op02FX);
+   DSP1.ViewerYc=ViewerY;//-DSP1.Op02FY);
+   DSP1.ViewerZc=ViewerZ;//-DSP1.Op02FZ);
 
-   CenterX = (-sinf(NAasB)*ViewerZc*CXdistance)+ViewerXc;
-   if (CenterX<-32768) CenterX = -32768; if (CenterX>32767) CenterX=32767;
-   CenterY = (cosf(NAasB)*ViewerZc*CXdistance)+ViewerYc;
-   if (CenterY<-32768) CenterY = -32768; if (CenterY>32767) CenterY=32767;
-
-   TValDebug = (short)((NAzsB*65536/6.28));
-   TValDebug2 = ScrDispl;
+   DSP1.CenterX = (-sinf(DSP1.NAasB)*DSP1.ViewerZc*CXdistance)+DSP1.ViewerXc;
+   if (DSP1.CenterX<-32768) DSP1.CenterX = -32768; if (DSP1.CenterX>32767) DSP1.CenterX=32767;
+   DSP1.CenterY = (cosf(DSP1.NAasB)*DSP1.ViewerZc*CXdistance)+DSP1.ViewerYc;
+   if (DSP1.CenterY<-32768) DSP1.CenterY = -32768; if (DSP1.CenterY>32767) DSP1.CenterY=32767;
 
 //   if (Op02CY < 0) {Op02CYSup = Op02CY/256; Op02CY = 0;}
 //   if (Op02CX < 0) {Op02CXSup = Op02CX/256; Op02CX = 0;}
@@ -672,151 +556,43 @@ void DSPOp02()
 //  [4/15/2001]   (ViewerX+ViewerX1*NumberOfSlope);
 //  [4/15/2001]   (ViewerY+ViewerY1*NumberOfSlope);
 
-//   if(Op02LFE==0x2200)Op02VVA=0xFECD;
-//   else Op02VVA=0xFFB2;
+//   if(DSP1.Op02LFE==0x2200)DSP1.Op02VVA=0xFECD;
+//   else DSP1.Op02VVA=0xFFB2;
 
+	DSP1.out_count = 8;
+	DSP1.output16 [0] = DSP1.Op02VOF;
+	DSP1.output16 [1] = DSP1.Op02VVA;
+	DSP1.output16 [2] = Op02CX;
+	DSP1.output16 [3] = Op02CY;
 
    #ifdef DebugDSP1
-      Log_Message("OP02 FX:%d FY:%d FZ:%d LFE:%d LES:%d",Op02FX,Op02FY,Op02FZ,Op02LFE,Op02LES);
-      Log_Message("     AAS:%d AZS:%d VOF:%d VVA:%d",Op02AAS,Op02AZS,Op02VOF,Op02VVA);
+      Log_Message("OP02 FX:%d FY:%d FZ:%d LFE:%d LES:%d",DSP1.Op02FX,DSP1.Op02FY,DSP1.Op02FZ,DSP1.Op02LFE,DSP1.Op02LES);
+      Log_Message("     AAS:%d AZS:%d VOF:%d VVA:%d",DSP1.Op02AAS,DSP1.Op02AZS,DSP1.Op02VOF,DSP1.Op02VVA);
       Log_Message("     VX:%d VY:%d VZ:%d",(short)ViewerX,(short)ViewerY,(short)ViewerZ);
    #endif
 
 }
-#else
-
-void DSPOp02()
-{
-   ViewerZ1=-cosf(Op02AZS*6.2832/65536.0);
-   ViewerX1=sinf(Op02AZS*6.2832/65536.0)*sinf(Op02AAS*6.2832/65536.0);
-   ViewerY1=sinf(Op02AZS*6.2832/65536.0)*cosf(-Op02AAS*6.2832/65536.0);
-
-   #ifdef debug02
-   printf("\nViewerX1 : %f ViewerY1 : %f ViewerZ1 : %f\n",ViewerX1,ViewerY1,
-                                                                   ViewerZ1);
-   getch();
-   #endif
-   ViewerX=Op02FX-ViewerX1*Op02LFE;
-   ViewerY=Op02FY-ViewerY1*Op02LFE;
-   ViewerZ=Op02FZ-ViewerZ1*Op02LFE;
-
-   ScreenX=Op02FX+ViewerX1*(Op02LES-Op02LFE);
-   ScreenY=Op02FY+ViewerY1*(Op02LES-Op02LFE);
-   ScreenZ=Op02FZ+ViewerZ1*(Op02LES-Op02LFE);
-
-   #ifdef debug02
-   printf("ViewerX : %f ViewerY : %f ViewerZ : %f\n",ViewerX,ViewerY,ViewerZ);
-   printf("Op02FX : %d Op02FY : %d Op02FZ : %d\n",Op02FX,Op02FY,Op02FZ);
-   printf("ScreenX : %f ScreenY : %f ScreenZ : %f\n",ScreenX,ScreenY,ScreenZ);
-   getch();
-   #endif
-   if (ViewerZ1==0)ViewerZ1++;
-   NumberOfSlope=ViewerZ/-ViewerZ1;
-
-   Op02CX=(short)(Op02CXF=ViewerX+ViewerX1*NumberOfSlope);
-   Op02CY=(short)(Op02CYF=ViewerY+ViewerY1*NumberOfSlope);
-
-   ViewerXc=ViewerX;//-Op02FX);
-   ViewerYc=ViewerY;//-Op02FY);
-   ViewerZc=ViewerZ;//-Op02FZ);
-
-   Op02VOF=0x0000;
-   ReversedLES=0;
-   Op02LESb=Op02LES;
-   if ((Op02LES>=VofAngle+16384.0) && (Op02LES<VofAngle+32768.0)) {
-     ReversedLES=1;
-     Op02LESb=VofAngle+0x4000-(Op02LES-(VofAngle+0x4000));
-   }
-   Op02VVA = (short)(Op02LESb * tanf((Op02AZS-0x4000)*6.2832/65536.0));
-   if ((Op02LESb>=VofAngle) && (Op02LESb<=VofAngle+0x4000)) {
-      Op02VOF= (short)(Op02LESb * tanf((Op02AZS-0x4000-VofAngle)*6.2832/65536.0));
-      Op02VVA-=Op02VOF;
-   }
-   if (ReversedLES){
-     Op02VOF=-Op02VOF;
-   }
-
-   NAzsB = (Op02AZS-0x4000)*6.2832/65536.0;
-   NAasB = Op02AAS*6.2832/65536.0;
-
-   if (tanf(NAzsB)==0) NAzsB=0.1;
-
-   ScrDispl=0;
-   if (NAzsB>-0.15) {NAzsB=-0.15;ScrDispl=Op02VVA-0xFFDA;}
-
-   CXdistance=1/tanf(NAzsB);
-
-   CenterX = (-sinf(NAasB)*ViewerZc*CXdistance)+ViewerXc;
-   if (CenterX<-32768) CenterX = -32768; if (CenterX>32767) CenterX=32767;
-   Op02CX = (short)CenterX;
-   CenterY = (cosf(NAasB)*ViewerZc*CXdistance)+ViewerYc;
-   if (CenterY<-32768) CenterY = -32768; if (CenterY>32767) CenterY=32767;
-   Op02CY = (short)CenterY;
-
-   TValDebug = (NAzsB*65536/6.28);
-   TValDebug2 = ScrDispl;
-
-//   if (Op02CY < 0) {Op02CYSup = Op02CY/256; Op02CY = 0;}
-//   if (Op02CX < 0) {Op02CXSup = Op02CX/256; Op02CX = 0;}
-
-//  [4/15/2001]   (ViewerX+ViewerX1*NumberOfSlope);
-//  [4/15/2001]   (ViewerY+ViewerY1*NumberOfSlope);
-
-//   if(Op02LFE==0x2200)Op02VVA=0xFECD;
-//   else Op02VVA=0xFFB2;
 
 
-   #ifdef DebugDSP1
-      Log_Message("OP02 FX:%d FY:%d FZ:%d LFE:%d LES:%d",Op02FX,Op02FY,Op02FZ,Op02LFE,Op02LES);
-      Log_Message("     AAS:%d AZS:%d VOF:%d VVA:%d",Op02AAS,Op02AZS,Op02VOF,Op02VVA);
-      Log_Message("     VX:%d VY:%d VZ:%d",(short)ViewerX,(short)ViewerY,(short)ViewerZ);
-   #endif
 
-}
-#endif
+void GetRXYPos(float RVPos, float RHPos){
+	float scalar;
 
-short Op0AVS;
-short Op0AA;
-short Op0AB;
-short Op0AC;
-short Op0AD;
-
-float RasterRX;
-float RasterRY;
-float RasterRZ;
-float RasterLSlopeX;
-float RasterLSlopeY;
-float RasterLSlopeZ;
-float RasterRSlopeX;
-float RasterRSlopeY;
-float RasterRSlopeZ;
-float GroundLX;
-float GroundLY;
-float GroundRX;
-float GroundRY;
-float Distance;
-
-float NAzs,NAas;
-float RVPos,RHPos,RXRes,RYRes;
+	if (DSP1.Op02LES==0) return;
+	float NAzs,NAas;
 
 
-void GetRXYPos(){
-   float scalar;
+	NAzs = DSP1.NAzsB - Atan((RVPos) / (float)DSP1.Op02LES);
+	NAas = DSP1.NAasB;// + Atan(RHPos) / (float)DSP1.Op02LES);
 
-   if (Op02LES==0) return;
+	if (cosf(NAzs)==0) NAzs+=0.001;
+	if (tanf(NAzs)==0) NAzs+=0.001;
 
-
-   NAzs = NAzsB - Atan((RVPos) / (float)Op02LES);
-   NAas = NAasB;// + Atan(RHPos) / (float)Op02LES);
-
-   if (cosf(NAzs)==0) NAzs+=0.001;
-   if (tanf(NAzs)==0) NAzs+=0.001;
-
-   RXRes = (-sinf(NAas)*ViewerZc/(tanf(NAzs))+ViewerXc);
-   RYRes = (cosf(NAas)*ViewerZc/(tanf(NAzs))+ViewerYc);
-   scalar = ((ViewerZc/sinf(NAzs))/(float)Op02LES);
-   RXRes += scalar*-sinf(NAas+PI/2)*RHPos;
-   RYRes += scalar*cosf(NAas+PI/2)*RHPos;
+	DSP1.RXRes = (-sinf(NAas)*DSP1.ViewerZc/(tanf(NAzs))+DSP1.ViewerXc);
+	DSP1.RYRes = (cosf(NAas)*DSP1.ViewerZc/(tanf(NAzs))+DSP1.ViewerYc);
+	scalar = ((DSP1.ViewerZc/sinf(NAzs))/(float)DSP1.Op02LES);
+	DSP1.RXRes += scalar*-sinf(NAas+PI/2)*RHPos;
+	DSP1.RYRes += scalar*cosf(NAas+PI/2)*RHPos;
 }
 
 void DSPOp0A()
@@ -824,101 +600,71 @@ void DSPOp0A()
   float x2,y2,x3,y3,x4,y4,m,ypos;
 
 
-   if(Op0AVS==0) {Op0AVS++; return;}
-   ypos=Op0AVS-ScrDispl;
-   // CenterX,CenterX = Center (x1,y1)
-   // Get (0,Vs) coords (x2,y2)
-   RVPos = ypos; RHPos = 0;
-   GetRXYPos(); x2 = RXRes; y2 = RYRes;
-   // Get (-128,Vs) coords (x3,y3)
-   RVPos = ypos; RHPos = -128;
-   GetRXYPos(); x3 = RXRes; y3 = RYRes;
-   // Get (127,Vs) coords (x4,y4)
-   RVPos = ypos; RHPos = 127;
-   GetRXYPos(); x4 = RXRes; y4 = RYRes;
+   if(DSP1.Op0AVS!=0) {
+	   ypos=DSP1.Op0AVS-DSP1.ScrDispl;
+	   // DSP1.CenterX,DSP1.CenterX = Center (x1,y1)
+	   // Get (0,Vs) coords (x2,y2)
+	   GetRXYPos(ypos, 0); x2 = DSP1.RXRes; y2 = DSP1.RYRes;
+	   // Get (-128,Vs) coords (x3,y3)
+	   GetRXYPos(ypos, -128); x3 = DSP1.RXRes; y3 = DSP1.RYRes;
+	   // Get (127,Vs) coords (x4,y4)
+	   GetRXYPos(ypos, 127); x4 = DSP1.RXRes; y4 = DSP1.RYRes;
 
-   // A = (x4-x3)/256
-   m = (x4-x3)/256*256; if (m>32767) m=32767; if (m<-32768) m=-32768;
-   Op0AA = (short)(m);
-   // C = (y4-y3)/256
-   m = (y4-y3)/256*256; if (m>32767) m=32767; if (m<-32768) m=-32768;
-   Op0AC = (short)(m);
-   if (ypos==0){
-     Op0AB = 0;
-     Op0AD = 0;
+	   // A = (x4-x3)/256
+	   m = (x4-x3)/256*256; if (m>32767) m=32767; if (m<-32768) m=-32768;
+	   DSP1.Op0AA = (short)(m);
+	   // C = (y4-y3)/256
+	   m = (y4-y3)/256*256; if (m>32767) m=32767; if (m<-32768) m=-32768;
+	   DSP1.Op0AC = (short)(m);
+	   if (ypos==0){
+		 DSP1.Op0AB = 0;
+		 DSP1.Op0AD = 0;
+	   }
+	   else {
+		 // B = (x2-x1)/Vs
+		 m = (x2-DSP1.CenterX)/ypos*256; if (m>32767) m=32767; if (m<-32768) m=-32768;
+		 DSP1.Op0AB = (short)(m);
+		 // D = (y2-y1)/Vs
+		 m = (y2-DSP1.CenterY)/ypos*256; if (m>32767) m=32767; if (m<-32768) m=-32768;
+		 DSP1.Op0AD = (short)(m);
+	   }
    }
-   else {
-     // B = (x2-x1)/Vs
-     m = (x2-CenterX)/ypos*256; if (m>32767) m=32767; if (m<-32768) m=-32768;
-     Op0AB = (short)(m);
-     // D = (y2-y1)/Vs
-     m = (y2-CenterY)/ypos*256; if (m>32767) m=32767; if (m<-32768) m=-32768;
-     Op0AD = (short)(m);
-   }
-
-   Op0AVS+=1;
+   DSP1.Op0AVS++;
 }
 
-short Op06X;
-short Op06Y;
-short Op06Z;
-short Op06H;
-short Op06V;
-unsigned short Op06S;
-
-/*float ObjPX;
-float ObjPY;
-float ObjPZ;
-float ObjPX1;
-float ObjPY1;
-float ObjPZ1;
-float ObjPX2;
-float ObjPY2;
-float ObjPZ2;*/
-int32 ObjPX;
-int32 ObjPY;
-int32 ObjPZ;
-int32 ObjPX1;
-int32 ObjPY1;
-int32 ObjPZ1;
-int32 ObjPX2;
-int32 ObjPY2;
-int32 ObjPZ2;
-
-float DivideOp06;
-int Temp;
-int tanval2;
 
 #define SADDMULT1616(res,a,b,c,d) res=((int64)a*(int64)b+(int64)c*(int64)d)>>16;
 
-#ifdef __OPT06__
-void DSPOp06()
+inline void DSPOp06()
 {
+	int tanval2;
+	short Op06X = (int16) DSP1.parameters16 [0];
+	short Op06Y = (int16) DSP1.parameters16 [1];
+	short Op06Z = (int16) DSP1.parameters16 [2];
+	int32 ObjPX;
+	int32 ObjPY;
+	int32 ObjPZ;
+	int32 ObjPX1;
+	int32 ObjPY1;
+	int32 ObjPZ1;
+	int32 ObjPX2;
+	int32 ObjPY2;
+	int32 ObjPZ2;
+	unsigned short Op06S;
 
-   ObjPX=Op06X-Op02FX;
-   ObjPY=Op06Y-Op02FY;
-   ObjPZ=Op06Z-Op02FZ;
+   ObjPX=Op06X-DSP1.Op02FX;
+   ObjPY=Op06Y-DSP1.Op02FY;
+   ObjPZ=Op06Z-DSP1.Op02FZ;
 
    // rotate around Z
-/*   tanval2 = Angle(-Op02AAS+32768);
-//   tanval2 = (-Op02AAS+32768)/(65536/INCR);
-   ObjPX1=(ObjPX*Cos(tanval2)+ObjPY*-Sin(tanval2));
-   ObjPY1=(ObjPX*Sin(tanval2)+ObjPY*Cos(tanval2));
-   ObjPZ1=ObjPZ;*/
-   tanval2 = AngleFix(-Op02AAS+32768);
+   tanval2 = AngleFix(-DSP1.Op02AAS+32768);
    SADDMULT1616(ObjPX1,ObjPX,CosFix(tanval2),ObjPY,-SinFix(tanval2))
    SADDMULT1616(ObjPY1,ObjPX,SinFix(tanval2),ObjPY,CosFix(tanval2))
    ObjPZ1=ObjPZ;
    
 
    // rotate around X
-//   tanval2 = (-Op02AZS/(65536/INCR)) & 1023;
-/*   tanval2 = Angle(-Op02AZS);
-//   tanval2 = (-Op02AZS)/256;
-   ObjPX2=ObjPX1;
-   ObjPY2=(ObjPY1*Cos(tanval2)+ObjPZ1*-Sin(tanval2));
-   ObjPZ2=(ObjPY1*Sin(tanval2)+ObjPZ1*Cos(tanval2));*/
-   tanval2 = AngleFix(-Op02AZS);
+   tanval2 = AngleFix(-DSP1.Op02AZS);
    ObjPX2=ObjPX1;
    SADDMULT1616(ObjPY2,ObjPY1,CosFix(tanval2),ObjPZ1,-SinFix(tanval2))
    SADDMULT1616(ObjPZ2,ObjPY1,SinFix(tanval2),ObjPZ1,CosFix(tanval2))
@@ -927,27 +673,20 @@ void DSPOp06()
    Log_Message("ObjPX2: %f ObjPY2: %f ObjPZ2: %f\n",ObjPX2,ObjPY2,ObjPZ2);
    #endif
 
-   ObjPZ2=ObjPZ2-Op02LFE;
+   ObjPZ2=ObjPZ2-DSP1.Op02LFE;
 
+	short Op06H;
+	short Op06V;
    if (ObjPZ2<0)
    {
       //float d;
       int32 d;
-      Op06H=(short)(-ObjPX2*Op02LES/-(ObjPZ2)); //-ObjPX2*256/-ObjPZ2;
-      Op06V=(short)(-ObjPY2*Op02LES/-(ObjPZ2)); //-ObjPY2*256/-ObjPZ2;
-      /*d=(float)Op02LES;
-	  d*=256.0;
-	  d/=(-ObjPZ2);
-	  if(d>65535.0)
-		  d=65535.0;
-	  else if(d<0.0)
-		  d=0.0;*/
-	  d=(((int32)Op02LES)<<8)/(-ObjPZ2);
+      Op06H=(short)(-ObjPX2*DSP1.Op02LES/-(ObjPZ2)); //-ObjPX2*256/-ObjPZ2;
+      Op06V=(short)(-ObjPY2*DSP1.Op02LES/-(ObjPZ2)); //-ObjPY2*256/-ObjPZ2;
+	  d=(((int32)DSP1.Op02LES)<<8)/(-ObjPZ2);
 	  if (d>65535) d=65535;
 	  if (d<0) d=0;
 	  Op06S=(unsigned short)d;
-	  //Op06S=(unsigned short)(256*(float)Op02LES/-ObjPZ2);
-      //Op06S=(unsigned short)((float)(256.0*((float)Op02LES)/(-ObjPZ2)));
    }
    else
    {
@@ -956,92 +695,25 @@ void DSPOp06()
       Op06S=0xFFFF;
    }
 
+	DSP1.out_count = 6;
+	DSP1.output16 [0] = Op06H;
+	DSP1.output16 [1] = Op06V;
+	DSP1.output16 [2] = Op06S;
 
    #ifdef DebugDSP1
       Log_Message("OP06 X:%d Y:%d Z:%d",Op06X,Op06Y,Op06Z);
       Log_Message("OP06 H:%d V:%d S:%d",Op06H,Op06V,Op06S);
    #endif
 }
-#else
 
-void DSPOp06()
+
+inline void DSPOp01()
 {
-   ObjPX=Op06X-Op02FX;
-   ObjPY=Op06Y-Op02FY;
-   ObjPZ=Op06Z-Op02FZ;
+	short Op01m = (int16) DSP1.parameters16 [0];
+	short Op01Zr = (int16) DSP1.parameters16 [1];
+	short Op01Yr = (int16) DSP1.parameters16 [2];
+	short Op01Xr = (int16) DSP1.parameters16 [3];
 
-   // rotate around Z
-   tanval = (-Op02AAS+32768)/65536.0*6.2832;
-   ObjPX1=(ObjPX*cosf(tanval)+ObjPY*-sinf(tanval));
-   ObjPY1=(ObjPX*sinf(tanval)+ObjPY*cosf(tanval));
-   ObjPZ1=ObjPZ;
-
-   #ifdef debug06
-   Log_Message("Angle : %f", tanval);
-   Log_Message("ObjPX1: %f ObjPY1: %f ObjPZ1: %f\n",ObjPX1,ObjPY1,ObjPZ1);
-   Log_Message("cos(tanval) : %f  sin(tanval) : %f", cosf(tanval), sinf(tanval));
-   #endif
-
-   // rotate around X
-   tanval = (-Op02AZS)/65536.0*6.2832;
-   ObjPX2=ObjPX1;
-   ObjPY2=(ObjPY1*cosf(tanval)+ObjPZ1*-sinf(tanval));
-   ObjPZ2=(ObjPY1*sinf(tanval)+ObjPZ1*cosf(tanval));
-
-   #ifdef debug06
-   Log_Message("ObjPX2: %f ObjPY2: %f ObjPZ2: %f\n",ObjPX2,ObjPY2,ObjPZ2);
-   #endif
-
-   ObjPZ2=ObjPZ2-Op02LFE;
-
-   if (ObjPZ2<0)
-   {
-      Op06H=(short)(-ObjPX2*Op02LES/-(ObjPZ2)); //-ObjPX2*256/-ObjPZ2;
-      Op06V=(short)(-ObjPY2*Op02LES/-(ObjPZ2)); //-ObjPY2*256/-ObjPZ2;
-      float d=(float)Op02LES;
-	  d*=256.0;
-	  d/=(-ObjPZ2);
-	  if(d>65535.0)
-		  d=65535.0;
-	  else if(d<0.0)
-		  d=0.0;
-	  Op06S=(unsigned short)d;
-//	  Op06S=(unsigned short)(256*(float)Op02LES/-ObjPZ2);
-   }
-   else
-   {
-      Op06H=0;
-      Op06V=14*16;
-      Op06S=0xFFFF;
-   }
-
-   #ifdef DebugDSP1
-      Log_Message("OP06 X:%d Y:%d Z:%d",Op06X,Op06Y,Op06Z);
-      Log_Message("OP06 H:%d V:%d S:%d",Op06H,Op06V,Op06S);
-   #endif
-}
-#endif 
-
-
-short matrixC[3][3];
-short matrixB[3][3];
-short matrixA[3][3];
-
-short Op01m;
-short Op01Zr;
-short Op01Xr;
-short Op01Yr;
-short Op11m;
-short Op11Zr;
-short Op11Xr;
-short Op11Yr;
-short Op21m;
-short Op21Zr;
-short Op21Xr;
-short Op21Yr;
-
-void DSPOp01()
-{
 	short SinAz = DSP1_Sin(Op01Zr);
 	short CosAz = DSP1_Cos(Op01Zr);
 	short SinAy = DSP1_Sin(Op01Yr);
@@ -1051,21 +723,26 @@ void DSPOp01()
 
 	Op01m >>= 1;
 
-	matrixA[0][0] = (Op01m * CosAz >> 15) * CosAy >> 15;
-	matrixA[0][1] = -((Op01m * SinAz >> 15) * CosAy >> 15);
-	matrixA[0][2] = Op01m * SinAy >> 15;
+	DSP1.matrixA[0][0] = (Op01m * CosAz >> 15) * CosAy >> 15;
+	DSP1.matrixA[0][1] = -((Op01m * SinAz >> 15) * CosAy >> 15);
+	DSP1.matrixA[0][2] = Op01m * SinAy >> 15;
 
-	matrixA[1][0] = ((Op01m * SinAz >> 15) * CosAx >> 15) + (((Op01m * CosAz >> 15) * SinAx >> 15) * SinAy >> 15);
-	matrixA[1][1] = ((Op01m * CosAz >> 15) * CosAx >> 15) - (((Op01m * SinAz >> 15) * SinAx >> 15) * SinAy >> 15);
-	matrixA[1][2] = -((Op01m * SinAx >> 15) * CosAy >> 15);
+	DSP1.matrixA[1][0] = ((Op01m * SinAz >> 15) * CosAx >> 15) + (((Op01m * CosAz >> 15) * SinAx >> 15) * SinAy >> 15);
+	DSP1.matrixA[1][1] = ((Op01m * CosAz >> 15) * CosAx >> 15) - (((Op01m * SinAz >> 15) * SinAx >> 15) * SinAy >> 15);
+	DSP1.matrixA[1][2] = -((Op01m * SinAx >> 15) * CosAy >> 15);
 
-	matrixA[2][0] = ((Op01m * SinAz >> 15) * SinAx >> 15) - (((Op01m * CosAz >> 15) * CosAx >> 15) * SinAy >> 15);
-	matrixA[2][1] = ((Op01m * CosAz >> 15) * SinAx >> 15) + (((Op01m * SinAz >> 15) * CosAx >> 15) * SinAy >> 15);
-	matrixA[2][2] = (Op01m * CosAx >> 15) * CosAy >> 15;
+	DSP1.matrixA[2][0] = ((Op01m * SinAz >> 15) * SinAx >> 15) - (((Op01m * CosAz >> 15) * CosAx >> 15) * SinAy >> 15);
+	DSP1.matrixA[2][1] = ((Op01m * CosAz >> 15) * SinAx >> 15) + (((Op01m * SinAz >> 15) * CosAx >> 15) * SinAy >> 15);
+	DSP1.matrixA[2][2] = (Op01m * CosAx >> 15) * CosAy >> 15;
 }
 
-void DSPOp11()
+inline void DSPOp11()
 {
+	short Op11m = (int16) DSP1.parameters16 [0];
+	short Op11Zr = (int16) DSP1.parameters16 [1];
+	short Op11Yr = (int16) DSP1.parameters16 [2];
+	short Op11Xr = (int16) DSP1.parameters16 [3];
+
 	short SinAz = DSP1_Sin(Op11Zr);
 	short CosAz = DSP1_Cos(Op11Zr);
 	short SinAy = DSP1_Sin(Op11Yr);
@@ -1075,21 +752,26 @@ void DSPOp11()
 
 	Op11m >>= 1;
 
-	matrixB[0][0] = (Op11m * CosAz >> 15) * CosAy >> 15;
-	matrixB[0][1] = -((Op11m * SinAz >> 15) * CosAy >> 15);
-	matrixB[0][2] = Op11m * SinAy >> 15;
+	DSP1.matrixB[0][0] = (Op11m * CosAz >> 15) * CosAy >> 15;
+	DSP1.matrixB[0][1] = -((Op11m * SinAz >> 15) * CosAy >> 15);
+	DSP1.matrixB[0][2] = Op11m * SinAy >> 15;
 
-	matrixB[1][0] = ((Op11m * SinAz >> 15) * CosAx >> 15) + (((Op11m * CosAz >> 15) * SinAx >> 15) * SinAy >> 15);
-	matrixB[1][1] = ((Op11m * CosAz >> 15) * CosAx >> 15) - (((Op11m * SinAz >> 15) * SinAx >> 15) * SinAy >> 15);
-	matrixB[1][2] = -((Op11m * SinAx >> 15) * CosAy >> 15);
+	DSP1.matrixB[1][0] = ((Op11m * SinAz >> 15) * CosAx >> 15) + (((Op11m * CosAz >> 15) * SinAx >> 15) * SinAy >> 15);
+	DSP1.matrixB[1][1] = ((Op11m * CosAz >> 15) * CosAx >> 15) - (((Op11m * SinAz >> 15) * SinAx >> 15) * SinAy >> 15);
+	DSP1.matrixB[1][2] = -((Op11m * SinAx >> 15) * CosAy >> 15);
 
-	matrixB[2][0] = ((Op11m * SinAz >> 15) * SinAx >> 15) - (((Op11m * CosAz >> 15) * CosAx >> 15) * SinAy >> 15);
-	matrixB[2][1] = ((Op11m * CosAz >> 15) * SinAx >> 15) + (((Op11m * SinAz >> 15) * CosAx >> 15) * SinAy >> 15);
-	matrixB[2][2] = (Op11m * CosAx >> 15) * CosAy >> 15;
+	DSP1.matrixB[2][0] = ((Op11m * SinAz >> 15) * SinAx >> 15) - (((Op11m * CosAz >> 15) * CosAx >> 15) * SinAy >> 15);
+	DSP1.matrixB[2][1] = ((Op11m * CosAz >> 15) * SinAx >> 15) + (((Op11m * SinAz >> 15) * CosAx >> 15) * SinAy >> 15);
+	DSP1.matrixB[2][2] = (Op11m * CosAx >> 15) * CosAy >> 15;
 }
 
-void DSPOp21()
+inline void DSPOp21()
 {
+	short Op21m = (int16) DSP1.parameters16 [0];
+	short Op21Zr = (int16) DSP1.parameters16 [1];
+	short Op21Yr = (int16) DSP1.parameters16 [2];
+	short Op21Xr = (int16) DSP1.parameters16 [3];
+
 	short SinAz = DSP1_Sin(Op21Zr);
 	short CosAz = DSP1_Cos(Op21Zr);
 	short SinAy = DSP1_Sin(Op21Yr);
@@ -1099,135 +781,136 @@ void DSPOp21()
 
 	Op21m >>= 1;
 
-	matrixC[0][0] = (Op21m * CosAz >> 15) * CosAy >> 15;
-	matrixC[0][1] = -((Op21m * SinAz >> 15) * CosAy >> 15);
-	matrixC[0][2] = Op21m * SinAy >> 15;
+	DSP1.matrixC[0][0] = (Op21m * CosAz >> 15) * CosAy >> 15;
+	DSP1.matrixC[0][1] = -((Op21m * SinAz >> 15) * CosAy >> 15);
+	DSP1.matrixC[0][2] = Op21m * SinAy >> 15;
 
-	matrixC[1][0] = ((Op21m * SinAz >> 15) * CosAx >> 15) + (((Op21m * CosAz >> 15) * SinAx >> 15) * SinAy >> 15);
-	matrixC[1][1] = ((Op21m * CosAz >> 15) * CosAx >> 15) - (((Op21m * SinAz >> 15) * SinAx >> 15) * SinAy >> 15);
-	matrixC[1][2] = -((Op21m * SinAx >> 15) * CosAy >> 15);
+	DSP1.matrixC[1][0] = ((Op21m * SinAz >> 15) * CosAx >> 15) + (((Op21m * CosAz >> 15) * SinAx >> 15) * SinAy >> 15);
+	DSP1.matrixC[1][1] = ((Op21m * CosAz >> 15) * CosAx >> 15) - (((Op21m * SinAz >> 15) * SinAx >> 15) * SinAy >> 15);
+	DSP1.matrixC[1][2] = -((Op21m * SinAx >> 15) * CosAy >> 15);
 
-	matrixC[2][0] = ((Op21m * SinAz >> 15) * SinAx >> 15) - (((Op21m * CosAz >> 15) * CosAx >> 15) * SinAy >> 15);
-	matrixC[2][1] = ((Op21m * CosAz >> 15) * SinAx >> 15) + (((Op21m * SinAz >> 15) * CosAx >> 15) * SinAy >> 15);
-	matrixC[2][2] = (Op21m * CosAx >> 15) * CosAy >> 15;
+	DSP1.matrixC[2][0] = ((Op21m * SinAz >> 15) * SinAx >> 15) - (((Op21m * CosAz >> 15) * CosAx >> 15) * SinAy >> 15);
+	DSP1.matrixC[2][1] = ((Op21m * CosAz >> 15) * SinAx >> 15) + (((Op21m * SinAz >> 15) * CosAx >> 15) * SinAy >> 15);
+	DSP1.matrixC[2][2] = (Op21m * CosAx >> 15) * CosAy >> 15;
 }
 
-short Op0DX;
-short Op0DY;
-short Op0DZ;
-short Op0DF;
-short Op0DL;
-short Op0DU;
-short Op1DX;
-short Op1DY;
-short Op1DZ;
-short Op1DF;
-short Op1DL;
-short Op1DU;
-short Op2DX;
-short Op2DY;
-short Op2DZ;
-short Op2DF;
-short Op2DL;
-short Op2DU;
-
-void DSPOp0D()
+inline void DSPOp0D()
 {
-    Op0DF = (Op0DX * matrixA[0][0] >> 15) + (Op0DY * matrixA[0][1] >> 15) + (Op0DZ * matrixA[0][2] >> 15);
-	Op0DL = (Op0DX * matrixA[1][0] >> 15) + (Op0DY * matrixA[1][1] >> 15) + (Op0DZ * matrixA[1][2] >> 15);
-	Op0DU = (Op0DX * matrixA[2][0] >> 15) + (Op0DY * matrixA[2][1] >> 15) + (Op0DZ * matrixA[2][2] >> 15);
+	short Op0DX = (int16) DSP1.parameters16 [0];
+	short Op0DY = (int16) DSP1.parameters16 [1];
+	short Op0DZ = (int16) DSP1.parameters16 [2];
+    short Op0DF = (Op0DX * DSP1.matrixA[0][0] >> 15) + (Op0DY * DSP1.matrixA[0][1] >> 15) + (Op0DZ * DSP1.matrixA[0][2] >> 15);
+	short Op0DL = (Op0DX * DSP1.matrixA[1][0] >> 15) + (Op0DY * DSP1.matrixA[1][1] >> 15) + (Op0DZ * DSP1.matrixA[1][2] >> 15);
+	short Op0DU = (Op0DX * DSP1.matrixA[2][0] >> 15) + (Op0DY * DSP1.matrixA[2][1] >> 15) + (Op0DZ * DSP1.matrixA[2][2] >> 15);
+	DSP1.out_count = 6;
+	DSP1.output16 [0] = Op0DF;
+	DSP1.output16 [1] = Op0DL;
+	DSP1.output16 [2] = Op0DU;
 
 	#ifdef DebugDSP1
 		Log_Message("OP0D X: %d Y: %d Z: %d / F: %d L: %d U: %d",Op0DX,Op0DY,Op0DZ,Op0DF,Op0DL,Op0DU);
 	#endif
 }
 
-void DSPOp1D()
+inline void DSPOp1D()
 {
-	Op1DF = (Op1DX * matrixB[0][0] >> 15) + (Op1DY * matrixB[0][1] >> 15) + (Op1DZ * matrixB[0][2] >> 15);
-	Op1DL = (Op1DX * matrixB[1][0] >> 15) + (Op1DY * matrixB[1][1] >> 15) + (Op1DZ * matrixB[1][2] >> 15);
-	Op1DU = (Op1DX * matrixB[2][0] >> 15) + (Op1DY * matrixB[2][1] >> 15) + (Op1DZ * matrixB[2][2] >> 15);
+	short Op1DX = (int16) DSP1.parameters16 [0];
+	short Op1DY = (int16) DSP1.parameters16 [1];
+	short Op1DZ = (int16) DSP1.parameters16 [2];
+	short Op1DF = (Op1DX * DSP1.matrixB[0][0] >> 15) + (Op1DY * DSP1.matrixB[0][1] >> 15) + (Op1DZ * DSP1.matrixB[0][2] >> 15);
+	short Op1DL = (Op1DX * DSP1.matrixB[1][0] >> 15) + (Op1DY * DSP1.matrixB[1][1] >> 15) + (Op1DZ * DSP1.matrixB[1][2] >> 15);
+	short Op1DU = (Op1DX * DSP1.matrixB[2][0] >> 15) + (Op1DY * DSP1.matrixB[2][1] >> 15) + (Op1DZ * DSP1.matrixB[2][2] >> 15);
+	DSP1.out_count = 6;
+	DSP1.output16 [0] = Op1DF;
+	DSP1.output16 [1] = Op1DL;
+	DSP1.output16 [2] = Op1DU;
 
 	#ifdef DebugDSP1
 		Log_Message("OP1D X: %d Y: %d Z: %d / F: %d L: %d U: %d",Op1DX,Op1DY,Op1DZ,Op1DF,Op1DL,Op1DU);
 	#endif
 }
 
-void DSPOp2D()
+inline void DSPOp2D()
 {
-	Op2DF = (Op2DX * matrixC[0][0] >> 15) + (Op2DY * matrixC[0][1] >> 15) + (Op2DZ * matrixC[0][2] >> 15);
-	Op2DL = (Op2DX * matrixC[1][0] >> 15) + (Op2DY * matrixC[1][1] >> 15) + (Op2DZ * matrixC[1][2] >> 15);
-	Op2DU = (Op2DX * matrixC[2][0] >> 15) + (Op2DY * matrixC[2][1] >> 15) + (Op2DZ * matrixC[2][2] >> 15);
+	short Op2DX = (int16) DSP1.parameters16 [0];
+	short Op2DY = (int16) DSP1.parameters16 [1];
+	short Op2DZ = (int16) DSP1.parameters16 [2];
+	short Op2DF = (Op2DX * DSP1.matrixC[0][0] >> 15) + (Op2DY * DSP1.matrixC[0][1] >> 15) + (Op2DZ * DSP1.matrixC[0][2] >> 15);
+	short Op2DL = (Op2DX * DSP1.matrixC[1][0] >> 15) + (Op2DY * DSP1.matrixC[1][1] >> 15) + (Op2DZ * DSP1.matrixC[1][2] >> 15);
+	short Op2DU = (Op2DX * DSP1.matrixC[2][0] >> 15) + (Op2DY * DSP1.matrixC[2][1] >> 15) + (Op2DZ * DSP1.matrixC[2][2] >> 15);
+	DSP1.out_count = 6;
+	DSP1.output16 [0] = Op2DF;
+	DSP1.output16 [1] = Op2DL;
+	DSP1.output16 [2] = Op2DU;
 
 	#ifdef DebugDSP1
 		Log_Message("OP2D X: %d Y: %d Z: %d / F: %d L: %d U: %d",Op2DX,Op2DY,Op2DZ,Op2DF,Op2DL,Op2DU);
 	#endif
 }
 
-short Op03F;
-short Op03L;
-short Op03U;
-short Op03X;
-short Op03Y;
-short Op03Z;
-short Op13F;
-short Op13L;
-short Op13U;
-short Op13X;
-short Op13Y;
-short Op13Z;
-short Op23F;
-short Op23L;
-short Op23U;
-short Op23X;
-short Op23Y;
-short Op23Z;
-
-void DSPOp03()
+inline void DSPOp03()
 {
-	Op03X = (Op03F * matrixA[0][0] >> 15) + (Op03L * matrixA[1][0] >> 15) + (Op03U * matrixA[2][0] >> 15);
-	Op03Y = (Op03F * matrixA[0][1] >> 15) + (Op03L * matrixA[1][1] >> 15) + (Op03U * matrixA[2][1] >> 15);
-	Op03Z = (Op03F * matrixA[0][2] >> 15) + (Op03L * matrixA[1][2] >> 15) + (Op03U * matrixA[2][2] >> 15);
+	short Op03F = (int16) DSP1.parameters16 [0];
+	short Op03L = (int16) DSP1.parameters16 [1];
+	short Op03U = (int16) DSP1.parameters16 [2];
+	short Op03X = (Op03F * DSP1.matrixA[0][0] >> 15) + (Op03L * DSP1.matrixA[1][0] >> 15) + (Op03U * DSP1.matrixA[2][0] >> 15);
+	short Op03Y = (Op03F * DSP1.matrixA[0][1] >> 15) + (Op03L * DSP1.matrixA[1][1] >> 15) + (Op03U * DSP1.matrixA[2][1] >> 15);
+	short Op03Z = (Op03F * DSP1.matrixA[0][2] >> 15) + (Op03L * DSP1.matrixA[1][2] >> 15) + (Op03U * DSP1.matrixA[2][2] >> 15);
+	DSP1.out_count = 6;
+	DSP1.output16 [0] = Op03X;
+	DSP1.output16 [1] = Op03Y;
+	DSP1.output16 [2] = Op03Z;
 
 	#ifdef DebugDSP1
 		Log_Message("OP03 F: %d L: %d U: %d / X: %d Y: %d Z: %d",Op03F,Op03L,Op03U,Op03X,Op03Y,Op03Z);
 	#endif
 }
 
-void DSPOp13()
+inline void DSPOp13()
 {
-	Op13X = (Op13F * matrixB[0][0] >> 15) + (Op13L * matrixB[1][0] >> 15) + (Op13U * matrixB[2][0] >> 15);
-	Op13Y = (Op13F * matrixB[0][1] >> 15) + (Op13L * matrixB[1][1] >> 15) + (Op13U * matrixB[2][1] >> 15);
-	Op13Z = (Op13F * matrixB[0][2] >> 15) + (Op13L * matrixB[1][2] >> 15) + (Op13U * matrixB[2][2] >> 15);
+	short Op13F = (int16) DSP1.parameters16 [0];
+	short Op13L = (int16) DSP1.parameters16 [1];
+	short Op13U = (int16) DSP1.parameters16 [2];
+	short Op13X = (Op13F * DSP1.matrixB[0][0] >> 15) + (Op13L * DSP1.matrixB[1][0] >> 15) + (Op13U * DSP1.matrixB[2][0] >> 15);
+	short Op13Y = (Op13F * DSP1.matrixB[0][1] >> 15) + (Op13L * DSP1.matrixB[1][1] >> 15) + (Op13U * DSP1.matrixB[2][1] >> 15);
+	short Op13Z = (Op13F * DSP1.matrixB[0][2] >> 15) + (Op13L * DSP1.matrixB[1][2] >> 15) + (Op13U * DSP1.matrixB[2][2] >> 15);
+	DSP1.out_count = 6;
+	DSP1.output16 [0] = Op13X;
+	DSP1.output16 [1] = Op13Y;
+	DSP1.output16 [2] = Op13Z;
 
 	#ifdef DebugDSP1
 		Log_Message("OP13 F: %d L: %d U: %d / X: %d Y: %d Z: %d",Op13F,Op13L,Op13U,Op13X,Op13Y,Op13Z);
 	#endif
 }
 
-void DSPOp23()
+inline void DSPOp23()
 {
-	Op23X = (Op23F * matrixC[0][0] >> 15) + (Op23L * matrixC[1][0] >> 15) + (Op23U * matrixC[2][0] >> 15);
-	Op23Y = (Op23F * matrixC[0][1] >> 15) + (Op23L * matrixC[1][1] >> 15) + (Op23U * matrixC[2][1] >> 15);
-	Op23Z = (Op23F * matrixC[0][2] >> 15) + (Op23L * matrixC[1][2] >> 15) + (Op23U * matrixC[2][2] >> 15);
+	short Op23F = (int16) DSP1.parameters16 [0];
+	short Op23L = (int16) DSP1.parameters16 [1];
+	short Op23U = (int16) DSP1.parameters16 [2];
+	short Op23X = (Op23F * DSP1.matrixC[0][0] >> 15) + (Op23L * DSP1.matrixC[1][0] >> 15) + (Op23U * DSP1.matrixC[2][0] >> 15);
+	short Op23Y = (Op23F * DSP1.matrixC[0][1] >> 15) + (Op23L * DSP1.matrixC[1][1] >> 15) + (Op23U * DSP1.matrixC[2][1] >> 15);
+	short Op23Z = (Op23F * DSP1.matrixC[0][2] >> 15) + (Op23L * DSP1.matrixC[1][2] >> 15) + (Op23U * DSP1.matrixC[2][2] >> 15);
+	DSP1.out_count = 6;
+	DSP1.output16 [0] = Op23X;
+	DSP1.output16 [1] = Op23Y;
+	DSP1.output16 [2] = Op23Z;
 
 	#ifdef DebugDSP1
 		Log_Message("OP23 F: %d L: %d U: %d / X: %d Y: %d Z: %d",Op23F,Op23L,Op23U,Op23X,Op23Y,Op23Z);
 	#endif
 }
 
-short Op14Zr;
-short Op14Xr;
-short Op14Yr;
-short Op14U;
-short Op14F;
-short Op14L;
-short Op14Zrr;
-short Op14Xrr;
-short Op14Yrr;
-
-void DSPOp14()
+inline void DSPOp14()
 {
+	short Op14Zr = (int16) DSP1.parameters16 [0];
+	short Op14Xr = (int16) DSP1.parameters16 [1];
+	short Op14Yr = (int16) DSP1.parameters16 [2];
+	short Op14U = (int16) DSP1.parameters16 [3];
+	short Op14F = (int16) DSP1.parameters16 [4];
+	short Op14L = (int16) DSP1.parameters16 [5];
+						
 	short CSec, ESec, CTan, CSin, C, E;
 		
 	DSP1_Inverse(DSP1_Cos(Op14Xr), 0, &CSec, &ESec);
@@ -1245,10 +928,10 @@ void DSPOp14()
 		if (E < 0) C = C * DSP1ROM[(0x31 + E)&1023] >> 15;
 	}
 	
-	Op14Zrr = Op14Zr + C;
+	short Op14Zrr = Op14Zr + C;
 
 	// Rotation Around X
-	Op14Xrr = Op14Xr + (Op14U * DSP1_Sin(Op14Yr) >> 15) + (Op14F * DSP1_Cos(Op14Yr) >> 15);
+	short Op14Xrr = Op14Xr + (Op14U * DSP1_Sin(Op14Yr) >> 15) + (Op14F * DSP1_Cos(Op14Yr) >> 15);
 
 	// Rotation Around Y
 	DSP1_Normalizefloat(Op14U * DSP1_Cos(Op14Yr) + Op14F * DSP1_Sin(Op14Yr), &C, &E);
@@ -1267,185 +950,39 @@ void DSPOp14()
 		if (E < 0) C = C * DSP1ROM[(0x31 + E)&1023] >> 15;
 	}
 
-	Op14Yrr = Op14Yr + C + Op14L;
+	short Op14Yrr = Op14Yr + C + Op14L;
+	DSP1.out_count = 6;
+	DSP1.output16 [0] = Op14Zrr;
+	DSP1.output16 [1] = Op14Xrr;
+	DSP1.output16 [2] = Op14Yrr;
 }
 
-short Op0EH;
-short Op0EV;
-short Op0EX;
-short Op0EY;
-
-void DSPOp0E()
+inline void DSPOp0B()
 {
-   // screen Directions UP
-   RVPos = Op0EV;
-   RHPos = Op0EH;
-   GetRXYPos();
-   Op0EX = (short)(RXRes);
-   Op0EY = (short)(RYRes);
-
-   #ifdef DebugDSP1
-      Log_Message("OP0E COORDINATE H:%d V:%d   X:%d Y:%d",Op0EH,Op0EV,Op0EX,Op0EY);
-   #endif
+	short Op0BX = (int16) DSP1.parameters16 [0];
+	short Op0BY = (int16) DSP1.parameters16 [1];
+	short Op0BZ = (int16) DSP1.parameters16 [2];
+	short Op0BS = (Op0BX * DSP1.matrixA[0][0] + Op0BY * DSP1.matrixA[0][1] + Op0BZ * DSP1.matrixA[0][2]) >> 15;
+	DSP1.out_count = 2;
+	DSP1.output16 [0] = Op0BS;
 }
 
-short Op0BX;
-short Op0BY;
-short Op0BZ;
-short Op0BS;
-short Op1BX;
-short Op1BY;
-short Op1BZ;
-short Op1BS;
-short Op2BX;
-short Op2BY;
-short Op2BZ;
-short Op2BS;
-
-void DSPOp0B()
-{
-    Op0BS = (Op0BX * matrixA[0][0] + Op0BY * matrixA[0][1] + Op0BZ * matrixA[0][2]) >> 15;
-
-	#ifdef DebugDSP1
-		Log_Message("OP0B");
-	#endif
-}
-
-void DSPOp1B()
+inline void DSPOp1B()
 {   
-    Op1BS = (Op1BX * matrixB[0][0] + Op1BY * matrixB[0][1] + Op1BZ * matrixB[0][2]) >> 15;
-
-	#ifdef DebugDSP1
-		Log_Message("OP1B X: %d Y: %d Z: %d S: %d",Op1BX,Op1BY,Op1BZ,Op1BS);
-		Log_Message("     MX: %d MY: %d MZ: %d Scale: %d",(short)(matrixB[0][0]*100),(short)(matrixB[0][1]*100),(short)(matrixB[0][2]*100),(short)(sc2*100));
-	#endif
+	short Op1BX = (int16) DSP1.parameters16 [0];
+	short Op1BY = (int16) DSP1.parameters16 [1];
+	short Op1BZ = (int16) DSP1.parameters16 [2];
+	short Op1BS = (Op1BX * DSP1.matrixB[0][0] + Op1BY * DSP1.matrixB[0][1] + Op1BZ * DSP1.matrixB[0][2]) >> 15;
+	DSP1.out_count = 2;
+	DSP1.output16 [0] = Op1BS;
 }
 
-void DSPOp2B()
+inline void DSPOp2B()
 {
-    Op2BS = (Op2BX * matrixC[0][0] + Op2BY * matrixC[0][1] + Op2BZ * matrixC[0][2]) >> 15;
-
-	#ifdef DebugDSP1
-		Log_Message("OP2B");
-	#endif
-}
-
-short Op08X,Op08Y,Op08Z,Op08Ll,Op08Lh;
-
-void DSPOp08()
-{
-	int Op08Size = (Op08X * Op08X + Op08Y * Op08Y + Op08Z * Op08Z) << 1;
-	Op08Ll = Op08Size & 0xffff;
-	Op08Lh = (Op08Size >> 16) & 0xffff;
-
-	#ifdef DebugDSP1
-		Log_Message("OP08 %d,%d,%d",Op08X,Op08Y,Op08Z);
-		Log_Message("OP08 ((Op08X^2)+(Op08Y^2)+(Op08X^2))=%x",Op08Size );
-	#endif
-}
-
-short Op18X,Op18Y,Op18Z,Op18R,Op18D;
-
-void DSPOp18()
-{
-   Op18D = (Op18X * Op18X + Op18Y * Op18Y + Op18Z * Op18Z - Op18R * Op18R) >> 15;
-
-   #ifdef DebugDSP1
-      Log_Message("Op18 X: %d Y: %d Z: %d R: %D DIFF %d",Op18X,Op18Y,Op38Z,Op18D);
-   #endif
-}
-
-short Op38X,Op38Y,Op38Z,Op38R,Op38D;
-
-void DSPOp38()
-{
-   Op38D = (Op38X * Op38X + Op38Y * Op38Y + Op38Z * Op38Z - Op38R * Op38R) >> 15;
-   Op38D++;
-
-   #ifdef DebugDSP1
-      Log_Message("OP38 X: %d Y: %d Z: %d R: %D DIFF %d",Op38X,Op38Y,Op38Z,Op38D);
-   #endif
-}
-
-short Op28X;
-short Op28Y;
-short Op28Z;
-short Op28R;
-
-void DSPOp28()
-{
-	int Radius = Op28X * Op28X + Op28Y * Op28Y + Op28Z * Op28Z;
-
-	if (Radius == 0) Op28R = 0;
-	else
-	{
-		short C, E;
-		DSP1_Normalizefloat(Radius, &C, &E);
-		if (E & 1) C = C * 0x4000 >> 15;
-
-		short Pos = C * 0x0040 >> 15;
-
-		short Node1 = DSP1ROM[(0x00d5 + Pos)&1023];
-		short Node2 = DSP1ROM[(0x00d6 + Pos)&1023];
-
-		Op28R = ((Node2 - Node1) * (C & 0x1ff) >> 9) + Node1;
-		Op28R >>= (E >> 1);
-	}
-
-   #ifdef DebugDSP1
-      Log_Message("OP28 X:%d Y:%d Z:%d",Op28X,Op28Y,Op28Z);
-      Log_Message("OP28 Vector Length %d",Op28R);
-   #endif
-}
-
-short Op1CX,Op1CY,Op1CZ;
-short Op1CXBR,Op1CYBR,Op1CZBR,Op1CXAR,Op1CYAR,Op1CZAR;
-short Op1CX1;
-short Op1CY1;
-short Op1CZ1;
-short Op1CX2;
-short Op1CY2;
-short Op1CZ2;
-
-void DSPOp1C()
-{
-
-	// Rotate Around Op1CZ1
-	Op1CX1 = (Op1CYBR * DSP1_Sin(Op1CZ) >> 15) + (Op1CXBR * DSP1_Cos(Op1CZ) >> 15);
-	Op1CY1 = (Op1CYBR * DSP1_Cos(Op1CZ) >> 15) - (Op1CXBR * DSP1_Sin(Op1CZ) >> 15);
-	Op1CXBR = Op1CX1; Op1CYBR = Op1CY1;
-
-	// Rotate Around Op1CY1
-	Op1CZ1 = (Op1CXBR * DSP1_Sin(Op1CY) >> 15) + (Op1CZBR * DSP1_Cos(Op1CY) >> 15);
-	Op1CX1 = (Op1CXBR * DSP1_Cos(Op1CY) >> 15) - (Op1CZBR * DSP1_Sin(Op1CY) >> 15);
-	Op1CXAR = Op1CX1; Op1CZBR = Op1CZ1;
-
-	// Rotate Around Op1CX1	
-	Op1CY1 = (Op1CZBR * DSP1_Sin(Op1CX) >> 15) + (Op1CYBR * DSP1_Cos(Op1CX) >> 15);
-	Op1CZ1 = (Op1CZBR * DSP1_Cos(Op1CX) >> 15) - (Op1CYBR * DSP1_Sin(Op1CX) >> 15);
-	Op1CYAR = Op1CY1; Op1CZAR = Op1CZ1;
-
-	#ifdef DebugDSP1
-		Log_Message("OP1C Apply Matrix CX:%d CY:%d CZ",Op1CXAR,Op1CYAR,Op1CZAR);
-	#endif
-}
-
-unsigned short Op0FRamsize;
-unsigned short Op0FPass;
-
-void DSPOp0F()
-{
-   Op0FPass = 0x0000;
-
-   #ifdef DebugDSP1
-      Log_Message("OP0F RAM Test Pass:%d", Op0FPass);
-   #endif
-}
-
-short Op2FUnknown;
-short Op2FSize;
-
-void DSPOp2F()
-{
-	Op2FSize=0x100;
+	short Op2BX = (int16) DSP1.parameters16 [0];
+	short Op2BY = (int16) DSP1.parameters16 [1];
+	short Op2BZ = (int16) DSP1.parameters16 [2];
+	short Op2BS = (Op2BX * DSP1.matrixC[0][0] + Op2BY * DSP1.matrixC[0][1] + Op2BZ * DSP1.matrixC[0][2]) >> 15;
+	DSP1.out_count = 2;
+	DSP1.output16 [0] = Op2BS;
 }

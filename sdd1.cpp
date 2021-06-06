@@ -99,7 +99,7 @@ void S9xSetSDD1MemoryMap (uint32 bank, uint32 value)
 	int i;
 
 	for (i = c; i < c + 16; i++)
-	    Memory.Map [i + bank] = block;
+	    MemBlock[i + bank].Map = block;
     }
 }
 

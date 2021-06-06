@@ -154,11 +154,11 @@ public:
     bool8 LoROM;
     uint16 SRAMMask;
     uint8 SRAMSize;
-    uint8 *Map [MEMMAP_NUM_BLOCKS];
+/*    uint8 *Map [MEMMAP_NUM_BLOCKS];
     uint8 *WriteMap [MEMMAP_NUM_BLOCKS];
     uint8 MemorySpeed [MEMMAP_NUM_BLOCKS];
     uint8 BlockIsRAM [MEMMAP_NUM_BLOCKS];
-    uint8 BlockIsROM [MEMMAP_NUM_BLOCKS];
+    uint8 BlockIsROM [MEMMAP_NUM_BLOCKS];*/
     char  ROMName [ROM_NAME_LEN];
     char  ROMId [5];
     char  CompanyId [3];
@@ -183,18 +183,32 @@ public:
     uint32 ROMCRC32;
 };
 
+struct SMEMMAPBLOCKS {
+    uint8 *Map;
+    uint8 *WriteMap;
+    uint8 MemorySpeed;
+    uint8 MemorySpeedx2;
+    uint8 BlockIsRAM;
+    uint8 BlockIsROM;
+	uint8 dummy[4];
+};
+
+
+
 START_EXTERN_C
 extern CMemory Memory;
-extern uint8 *SRAM;
+extern uint8 SRAM[];
 extern uint8 *ROM;
-extern uint8 *RegRAM;
+//extern uint8 *RegRAM;
 extern uint8 *C4RAM;
 extern uint8 *RAM;
-extern uint8 *VRAM;
-extern uint8 *VRAMmode7;
+extern uint8 VRAM[];
+//extern uint8 *VRAMmode7;
 extern uint8 *BWRAM;
 extern uint8 *FillRAM;
 extern uint8 *C4RAM;
+
+extern struct SMEMMAPBLOCKS MemBlock[];
 
 void S9xDeinterleaveMode2 ();
 END_EXTERN_C

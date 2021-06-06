@@ -44,10 +44,10 @@
 #include "cpuexec.h"
 
 #include "sa1.h"
+#define CPUPack SA1Pack
 #define CPU SA1
 #define ICPU SA1
 
-#undef Registers
 
 #define Registers SA1Registers
 #define S9xGetByte S9xSA1GetByte
@@ -98,51 +98,51 @@ void S9xSA1MainLoop ()
     int i;
 
 #if 0
-    if (SA1.Flags & NMI_FLAG)
+    if (SA1Pack.SA1.Flags & NMI_FLAG)
     {
-	SA1.Flags &= ~NMI_FLAG;
-	if (SA1.WaitingForInterrupt)
+	SA1Pack.SA1.Flags &= ~NMI_FLAG;
+	if (SA1Pack.SA1.WaitingForInterrupt)
 	{
-	    SA1.WaitingForInterrupt = FALSE;
-	    SA1.PC++;
+	    SA1Pack.SA1.WaitingForInterrupt = FALSE;
+	    SA1Pack.SA1.PC++;
 	}
 	S9xSA1Opcode_NMI ();
     }
 #endif
-    if (SA1.Flags & IRQ_PENDING_FLAG)
+    if (SA1Pack.SA1.Flags & IRQ_PENDING_FLAG)
     {
-	if (SA1.IRQActive)
+	if (SA1Pack.SA1.IRQActive)
 	{
-	    if (SA1.WaitingForInterrupt)
+	    if (SA1Pack.SA1.WaitingForInterrupt)
 	    {
-		SA1.WaitingForInterrupt = FALSE;
-		SA1.PC++;
+		SA1Pack.SA1.WaitingForInterrupt = FALSE;
+		SA1Pack.SA1.PC++;
 	    }
 	    if (!SA1CheckFlag (IRQ))
 		S9xSA1Opcode_IRQ ();
 	}
 	else
-	    SA1.Flags &= ~IRQ_PENDING_FLAG;
+	    SA1Pack.SA1.Flags &= ~IRQ_PENDING_FLAG;
     }
 #ifdef DEBUGGER
-    if (SA1.Flags & TRACE_FLAG)
+    if (SA1Pack.SA1.Flags & TRACE_FLAG)
     {
-	for (i = 0; i < 3 && SA1.Executing; i++)
+	for (i = 0; i < 3 && SA1Pack.SA1.Executing; i++)
 	{
 	    S9xSA1Trace ();
 #ifdef CPU_SHUTDOWN
-	    SA1.PCAtOpcodeStart = SA1.PC;
+	//SA1Pack.SA1.PCAtOpcodeStart = SA1Pack.SA1.PC;
 #endif
-	    (*SA1.S9xOpcodes [*SA1.PC++].S9xOpcode) ();
+	    (*SA1Pack.SA1.S9xOpcodes [*SA1Pack.SA1.PC++].S9xOpcode) ();
 	}
     }
     else
 #endif
-    for (i = 0; i < 3 && SA1.Executing; i++)
+    for (i = 0; i < 3 && SA1Pack.SA1.Executing; i++)
     {
 #ifdef CPU_SHUTDOWN
-	SA1.PCAtOpcodeStart = SA1.PC;
+	//SA1Pack.SA1.PCAtOpcodeStart = SA1Pack.SA1.PC;
 #endif
-	(*SA1.S9xOpcodes [*SA1.PC++].S9xOpcode) ();
+	(*SA1Pack.SA1.S9xOpcodes [*SA1Pack.SA1.PC++].S9xOpcode) ();
     }
 }

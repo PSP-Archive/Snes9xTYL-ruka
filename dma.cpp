@@ -88,10 +88,10 @@ void S9xDoDMA (uint8 Channel)
 {
     uint8 Work;
 	
-    if (Channel > 7 || CPU.InDMA)
+    if (/*Channel > 7 || */CPUPack.CPU.InDMA)
 		return;
 	
-    CPU.InDMA = TRUE;
+    CPUPack.CPU.InDMA = TRUE;
     bool8 in_sa1_dma = FALSE;
     uint8 *in_sdd1_dma = NULL;
 	uint8 *spc7110_dma=NULL;
@@ -112,7 +112,7 @@ void S9xDoDMA (uint8 Channel)
 		//does an invalid DMA actually take time?
 		// I'd say yes, since 'invalid' is probably just the WRAM chip
 		// not being able to read and write itself at the same time
-		CPU.Cycles+=(d->TransferBytes+1)*SLOW_ONE_CYCLE;
+		CPUPack.CPU.Cycles+=(d->TransferBytes+1)*SLOW_ONE_CYCLE;
 //		S9xUpdateAPUTimer();
 		goto update_address;
 	}
@@ -242,46 +242,7 @@ void S9xDoDMA (uint8 Channel)
 
 		FillRAM [0x4801] = 0;
     }
-/*	if(Settings.SPC7110&&(d->AAddress==0x4800||d->ABank==0x50))
-	{
-		uint32 i,j;
-		i=(s7r.reg4805|(s7r.reg4806<<8));
-#ifdef SPC7110_DEBUG
-		printf("DMA Transfer of %04X bytes from %02X%02X%02X:%02X, offset of %04X, internal bank of %04X, multiplier %02X\n",d->TransferBytes,s7r.reg4803,s7r.reg4802,s7r.reg4801, s7r.reg4804,i,  s7r.bank50Internal, s7r.AlignBy);
-#endif
-		i*=s7r.AlignBy;
-		i+=s7r.bank50Internal;
-		i%=DECOMP_BUFFER_SIZE;
-		j=0;
-		if((i+d->TransferBytes)<DECOMP_BUFFER_SIZE)
-		{
-			spc7110_dma=&s7r.bank50[i];
-		}
-		else
-		{
-#ifdef PSP
-#if 0
-			spc7110_dma=(uint8 *) malloc (sizeof (uint8) * d->TransferBytes);
-#endif
-#else
-			spc7110_dma=new uint8[d->TransferBytes];
-#endif
-			j=DECOMP_BUFFER_SIZE-i;
-			memcpy(spc7110_dma, &s7r.bank50[i], j);
-			memcpy(&spc7110_dma[j],s7r.bank50,d->TransferBytes-j);
-			s7_wrap=true;
-		}
-		int icount=s7r.reg4809|(s7r.reg480A<<8);
-		icount-=d->TransferBytes;
-		s7r.reg4809=0x00ff&icount;
-		s7r.reg480A=(0xff00&icount)>>8;
-
-		s7r.bank50Internal+=d->TransferBytes;
-		s7r.bank50Internal%=DECOMP_BUFFER_SIZE;
-		inc=1;
-		d->AAddress-=count;
-	}*/
-    if (d->BAddress == 0x18 && SA1.in_char_dma && (d->ABank & 0xf0) == 0x40)
+    if (d->BAddress == 0x18 && SA1Pack.SA1.in_char_dma && (d->ABank & 0xf0) == 0x40)
     {
 		// Perform packed bitmap to PPU character format conversion on the
 		// data before transmitting it to V-RAM via-DMA.
@@ -397,34 +358,6 @@ void S9xDoDMA (uint8 Channel)
 		}
     }
 	
-#ifdef DEBUGGER
-    if (Settings.TraceDMA)
-    {
-		sprintf (String, "DMA[%d]: %s Mode: %d 0x%02X%04X->0x21%02X Bytes: %d (%s) V-Line:%ld",
-			Channel, d->TransferDirection ? "read" : "write",
-			d->TransferMode, d->ABank, d->AAddress,
-			d->BAddress, d->TransferBytes,
-			d->AAddressFixed ? "fixed" :
-		(d->AAddressDecrement ? "dec" : "inc"),
-			CPU.V_Counter);
-		if (d->BAddress == 0x18 || d->BAddress == 0x19 || d->BAddress == 0x39 || d->BAddress == 0x3a)
-			sprintf (String, "%s VRAM: %04X (%d,%d) %s", String,
-				PPU.VMA.Address,
-				PPU.VMA.Increment, PPU.VMA.FullGraphicCount,
-				PPU.VMA.High ? "word" : "byte");
-
-		else
-			if (d->BAddress == 0x22 || d->BAddress == 0x3b)
-			
-				sprintf (String, "%s CGRAM: %02X (%x)", String, PPU.CGADD,
-					PPU.CGFLIP);			
-			else
-				if (d->BAddress == 0x04 || d->BAddress == 0x38)
-					sprintf (String, "%s OBJADDR: %04X", String, PPU.OAMAddr);
-				S9xMessage (S9X_TRACE, S9X_DMA_TRACE, String);
-    }
-#endif
-	
     if (!d->TransferDirection)
     {
 		/* XXX: DMA is potentially broken here for cases where we DMA across
@@ -440,30 +373,27 @@ void S9xDoDMA (uint8 Channel)
 		 */
 
 		//reflects extra cycle used by DMA
-		CPU.Cycles += SLOW_ONE_CYCLE * (count+1);
+		CPUPack.CPU.Cycles += SLOW_ONE_CYCLE * (count+1);
 //		S9xUpdateAPUTimer();
 
-		uint8 *base = GetBasePointer ((d->ABank << 16) + d->AAddress);
-		uint16 p = d->AAddress;
+		uint8 *readptr = GetBasePointer ((d->ABank << 16) + d->AAddress) + d->AAddress;
 		
-		if (!base)
-			base = ROM;
+		if (!readptr) {
+			readptr = ROM + d->AAddress;
+		}
 		
 		if (in_sa1_dma)
 		{
-			base = &ROM [CMemory::MAX_ROM_SIZE - 0x10000];
-			p = 0;
+			readptr = &ROM [CMemory::MAX_ROM_SIZE - 0x10000];
 		}
 		
 		if (in_sdd1_dma)
 		{
-			base = in_sdd1_dma;
-			p = 0;
+			readptr = in_sdd1_dma;
 		}
 		if(spc7110_dma)
 		{
-			base=spc7110_dma;
-			p = 0;
+			readptr=spc7110_dma;
 		}
 		if (inc > 0)
 			d->AAddress += count;
@@ -478,9 +408,8 @@ void S9xDoDMA (uint8 Channel)
 				case 0x04:
 					do
 					{
-						Work = *(base + p);
-						REGISTER_2104(Work);
-						p += inc;
+						REGISTER_2104(*readptr);
+						readptr += inc;
 						CHECK_SOUND();
 					} while (--count > 0);
 					break;
@@ -492,9 +421,8 @@ void S9xDoDMA (uint8 Channel)
 					{
 						do
 						{
-							Work = *(base + p);
-							REGISTER_2118_linear(Work);
-							p += inc;
+							REGISTER_2118_linear(*readptr);
+							readptr += inc;
 							CHECK_SOUND();
 						} while (--count > 0);
 					}
@@ -502,9 +430,8 @@ void S9xDoDMA (uint8 Channel)
 					{
 						do
 						{
-							Work = *(base + p);
-							REGISTER_2118_tile(Work);
-							p += inc;
+							REGISTER_2118_tile(*readptr);
+							readptr += inc;
 							CHECK_SOUND();
 						} while (--count > 0);
 					}
@@ -517,9 +444,8 @@ void S9xDoDMA (uint8 Channel)
 					{
 						do
 						{
-							Work = *(base + p);
-							REGISTER_2119_linear(Work);
-							p += inc;
+							REGISTER_2119_linear(*readptr);
+							readptr += inc;
 							CHECK_SOUND();
 						} while (--count > 0);
 					}
@@ -527,9 +453,8 @@ void S9xDoDMA (uint8 Channel)
 					{
 						do
 						{
-							Work = *(base + p);
-							REGISTER_2119_tile(Work);
-							p += inc;
+							REGISTER_2119_tile(*readptr);
+							readptr += inc;
 							CHECK_SOUND();
 						} while (--count > 0);
 					}
@@ -537,27 +462,24 @@ void S9xDoDMA (uint8 Channel)
 				case 0x22:
 					do
 					{
-						Work = *(base + p);
-						REGISTER_2122(Work);
-						p += inc;
+						REGISTER_2122(*readptr);
+						readptr += inc;
 						CHECK_SOUND();
 					} while (--count > 0);
 					break;
 				case 0x80:
 					do
 					{
-						Work = *(base + p);
-						REGISTER_2180(Work);
-						p += inc;
+						REGISTER_2180(*readptr);
+						readptr += inc;
 						CHECK_SOUND();
 					} while (--count > 0);
 					break;
 				default:
 					do
 					{
-						Work = *(base + p);
-						S9xSetPPU (Work, 0x2100 + d->BAddress);
-						p += inc;
+						S9xSetPPU (*readptr, 0x2100 + d->BAddress);
+						readptr += inc;
 						CHECK_SOUND();
 					} while (--count > 0);
 					break;
@@ -576,42 +498,36 @@ void S9xDoDMA (uint8 Channel)
 						{
 							while (count > 1)
 							{
-								Work = *(base + p);
-								REGISTER_2118_linear(Work);
-								p += inc;
+								REGISTER_2118_linear(*readptr);
+								readptr += inc;
 								
-								Work = *(base + p);
-								REGISTER_2119_linear(Work);
-								p += inc;
+								REGISTER_2119_linear(*readptr);
+								readptr += inc;
 								CHECK_SOUND();
 								count -= 2;
 							}
 							if (count == 1)
 							{
-								Work = *(base + p);
-								REGISTER_2118_linear(Work);
-								p += inc;
+								REGISTER_2118_linear(*readptr);
+								readptr += inc;
 							}
 						}
 						else
 						{
 							while (count > 1)
 							{
-								Work = *(base + p);
-								REGISTER_2118_tile(Work);
-								p += inc;
+								REGISTER_2118_tile(*readptr);
+								readptr += inc;
 								
-								Work = *(base + p);
-								REGISTER_2119_tile(Work);
-								p += inc;
+								REGISTER_2119_tile(*readptr);
+								readptr += inc;
 								CHECK_SOUND();
 								count -= 2;
 							}
 							if (count == 1)
 							{
-								Work = *(base + p);
-								REGISTER_2118_tile(Work);
-								p += inc;
+								REGISTER_2118_tile(*readptr);
+								readptr += inc;
 							}
 						}
 					}
@@ -620,21 +536,18 @@ void S9xDoDMA (uint8 Channel)
 						// DMA mode 1 general case
 						while (count > 1)
 						{
-							Work = *(base + p);
-							S9xSetPPU (Work, 0x2100 + d->BAddress);
-							p += inc;
+							S9xSetPPU (*readptr, 0x2100 + d->BAddress);
+							readptr += inc;
 							
-							Work = *(base + p);
-							S9xSetPPU (Work, 0x2101 + d->BAddress);
-							p += inc;
+							S9xSetPPU (*readptr, 0x2101 + d->BAddress);
+							readptr += inc;
 							CHECK_SOUND();
 							count -= 2;
 						}
 						if (count == 1)
 						{
-							Work = *(base + p);
-							S9xSetPPU (Work, 0x2100 + d->BAddress);
-							p += inc;
+							S9xSetPPU (*readptr, 0x2100 + d->BAddress);
+							readptr += inc;
 						}
 					}
 				}
@@ -643,27 +556,23 @@ void S9xDoDMA (uint8 Channel)
 					{
 						do
 						{
-							Work = *(base + p);
-							S9xSetPPU (Work, 0x2100 + d->BAddress);
-							p += inc;
+							S9xSetPPU (*readptr, 0x2100 + d->BAddress);
+							readptr += inc;
 							if (count <= 1)
 								break;
 							
-							Work = *(base + p);
-							S9xSetPPU (Work, 0x2100 + d->BAddress);
-							p += inc;
+							S9xSetPPU (*readptr, 0x2100 + d->BAddress);
+							readptr += inc;
 							if (count <= 2)
 								break;
 							
-							Work = *(base + p);
-							S9xSetPPU (Work, 0x2101 + d->BAddress);
-							p += inc;
+							S9xSetPPU (*readptr, 0x2101 + d->BAddress);
+							readptr += inc;
 							if (count <= 3)
 								break;
 							
-							Work = *(base + p);
-							S9xSetPPU (Work, 0x2101 + d->BAddress);
-							p += inc;
+							S9xSetPPU (*readptr, 0x2101 + d->BAddress);
+							readptr += inc;
 							CHECK_SOUND();
 							count -= 4;
 						} while (count > 0);
@@ -673,27 +582,23 @@ void S9xDoDMA (uint8 Channel)
 						{
 							do
 							{
-								Work = *(base + p);
-								S9xSetPPU (Work, 0x2100 + d->BAddress);
-								p += inc;
+								S9xSetPPU (*readptr, 0x2100 + d->BAddress);
+								readptr += inc;
 								if (count <= 1)
 									break;
 								
-								Work = *(base + p);
-								S9xSetPPU (Work, 0x2101 + d->BAddress);
-								p += inc;
+								S9xSetPPU (*readptr, 0x2101 + d->BAddress);
+								readptr += inc;
 								if (count <= 2)
 									break;
 								
-								Work = *(base + p);
-								S9xSetPPU (Work, 0x2102 + d->BAddress);
-								p += inc;
+								S9xSetPPU (*readptr, 0x2102 + d->BAddress);
+								readptr += inc;
 								if (count <= 3)
 									break;
 								
-								Work = *(base + p);
-								S9xSetPPU (Work, 0x2103 + d->BAddress);
-								p += inc;
+								S9xSetPPU (*readptr, 0x2103 + d->BAddress);
+								readptr += inc;
 								CHECK_SOUND();
 								count -= 4;
 							} while (count > 0);
@@ -813,20 +718,21 @@ void S9xDoDMA (uint8 Channel)
     
 #ifdef SPC700_C
 
-    (IAPUuncached->APUExecuting) = Settings.APUEnabled;    
-    if (IAPUuncached->APUExecuting) {
-    	if (CPU.Cycles-old_cpu_cycles<0) msgBoxLines("2",60);
-			else cpu_glob_cycles += CPU.Cycles-old_cpu_cycles;
-			old_cpu_cycles=CPU.Cycles;
-			*apu_glob_cycles=cpu_glob_cycles;
-			
-			if (cpu_glob_cycles>=0x00700000) {
-					APU_EXECUTE2 ();
-			}
+    SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);
+    pEvent->IAPU_APUExecuting = Settings.APUEnabled;    
+    if (Settings.APUEnabled) {
+    	/*if (CPUPack.CPU.Cycles-old_cpu_cycles<0) msgBoxLines("2",60);
+			else */
+		cpu_glob_cycles += CPUPack.CPU.Cycles-old_cpu_cycles;
+		old_cpu_cycles=CPUPack.CPU.Cycles;
+		pEvent->apu_glob_cycles=cpu_glob_cycles;
+		if (cpu_glob_cycles>=0x00700000) {
+				APU_EXECUTE2 ();
+		}
     }
     //APU_EXECUTE ();
 #endif
-    while (CPU.Cycles > CPU.NextEvent) S9xDoHBlankProcessing ();
+    while (CPUPack.CPU.Cycles > CPUPack.CPU.NextEvent) S9xDoHBlankProcessing ();
 //	S9xUpdateAPUTimer();
 
 /*	if(Settings.SPC7110&&spc7110_dma)
@@ -843,8 +749,7 @@ void S9xDoDMA (uint8 Channel)
 update_address:
     // Super Punch-Out requires that the A-BUS address be updated after the
     // DMA transfer.
-    FillRAM[0x4302 + (Channel << 4)] = (uint8) d->AAddress;
-    FillRAM[0x4303 + (Channel << 4)] = d->AAddress >> 8;
+    *((uint16*)(FillRAM + 0x4302 + (Channel << 4))) = d->AAddress;
 	
     // Secret of the Mana requires that the DMA bytes transfer count be set to
     // zero when DMA has completed.
@@ -854,7 +759,7 @@ update_address:
     DMA[Channel].IndirectAddress = 0;
     d->TransferBytes = 0;
     
-    CPU.InDMA = FALSE;
+    CPUPack.CPU.InDMA = FALSE;
 
 
 }
@@ -866,7 +771,7 @@ void S9xStartHDMA () {
 	
 	//per anomie timing post
 	if(IPPU.HDMA!=0) {
-		CPU.Cycles+=ONE_CYCLE*3;
+		CPUPack.CPU.Cycles+=ONE_CYCLE*3;
 //		S9xUpdateAPUTimer();
 	}
     
@@ -874,13 +779,13 @@ void S9xStartHDMA () {
 
 	for (uint8 i = 0; i < 8; i++) {
 		if (IPPU.HDMA & (1 << i)) {
-			CPU.Cycles+=SLOW_ONE_CYCLE ;
+			CPUPack.CPU.Cycles+=SLOW_ONE_CYCLE ;
 //			S9xUpdateAPUTimer();
 			DMA [i].LineCount = 0;
 			DMA [i].FirstLine = TRUE;
 			DMA [i].Address = DMA [i].AAddress;
 			if(DMA[i].HDMAIndirectAddressing) {
-				CPU.Cycles+=(SLOW_ONE_CYCLE <<2);
+				CPUPack.CPU.Cycles+=(SLOW_ONE_CYCLE <<2);
 //				S9xUpdateAPUTimer();
 			}
 		}
@@ -901,15 +806,15 @@ uint8 S9xDoHDMA (uint8 byte) {
 	struct SDMA *p = &DMA [0];    
 	int d = 0;
 
-	CPU.InDMA = TRUE;
-	CPU.Cycles+=ONE_CYCLE*3;
+	CPUPack.CPU.InDMA = TRUE;
+	CPUPack.CPU.Cycles+=ONE_CYCLE*3;
 //	S9xUpdateAPUTimer();
   for (uint8 mask = 1; mask; mask <<= 1, p++, d++) {
 		if (byte & mask) {
 			if (!p->LineCount) {
 				//remember, InDMA is set.
 				//Get/Set incur no charges!
-				CPU.Cycles+=SLOW_ONE_CYCLE;
+				CPUPack.CPU.Cycles+=SLOW_ONE_CYCLE;
 //				S9xUpdateAPUTimer();
 				uint8 line = S9xGetByte ((p->ABank << 16) + p->Address);
 				if (line == 0x80) {
@@ -941,7 +846,7 @@ uint8 S9xDoHDMA (uint8 byte) {
 				if (p->HDMAIndirectAddressing) {
 					p->IndirectBank = FillRAM [0x4307 + (d << 4)];
 					//again, no cycle charges while InDMA is set!
-					CPU.Cycles+=SLOW_ONE_CYCLE<<2;
+					CPUPack.CPU.Cycles+=SLOW_ONE_CYCLE<<2;
 //					S9xUpdateAPUTimer();
 					p->IndirectAddress = S9xGetWord ((p->ABank << 16) + p->Address);
 					p->Address += 2;
@@ -954,7 +859,7 @@ uint8 S9xDoHDMA (uint8 byte) {
 				HDMARawPointers [d] = (p->IndirectBank << 16) + p->IndirectAddress;
 #endif
 			} else {
-				CPU.Cycles += SLOW_ONE_CYCLE;
+				CPUPack.CPU.Cycles += SLOW_ONE_CYCLE;
 //				S9xUpdateAPUTimer();
 			}
 			if (!HDMAMemPointers [d]) {
@@ -990,7 +895,7 @@ uint8 S9xDoHDMA (uint8 byte) {
 			}
 			switch (p->TransferMode) {
 				case 0:
-					CPU.Cycles += SLOW_ONE_CYCLE;
+					CPUPack.CPU.Cycles += SLOW_ONE_CYCLE;
 //					S9xUpdateAPUTimer();
 #ifdef SETA010_HDMA_FROM_CART
 					S9xSetPPU (S9xGetByte (HDMARawPointers [d]++), 0x2100 + p->BAddress);
@@ -1000,7 +905,7 @@ uint8 S9xDoHDMA (uint8 byte) {
 #endif
 					break;
 				case 5:
-					CPU.Cycles += 2*SLOW_ONE_CYCLE;
+					CPUPack.CPU.Cycles += 2*SLOW_ONE_CYCLE;
 //					S9xUpdateAPUTimer();
 #ifdef SETA010_HDMA_FROM_CART
 					S9xSetPPU (S9xGetByte (HDMARawPointers [d]), 0x2100 + p->BAddress);
@@ -1013,7 +918,7 @@ uint8 S9xDoHDMA (uint8 byte) {
 					HDMAMemPointers [d] += 2;
 					/* fall through */
 				case 1:
-					CPU.Cycles += 2*SLOW_ONE_CYCLE;
+					CPUPack.CPU.Cycles += 2*SLOW_ONE_CYCLE;
 //					S9xUpdateAPUTimer();
 #ifdef SETA010_HDMA_FROM_CART
 					S9xSetPPU (S9xGetByte (HDMARawPointers [d]), 0x2100 + p->BAddress);
@@ -1027,7 +932,7 @@ uint8 S9xDoHDMA (uint8 byte) {
 					break;
 				case 2:
 				case 6:
-					CPU.Cycles += 2*SLOW_ONE_CYCLE;
+					CPUPack.CPU.Cycles += 2*SLOW_ONE_CYCLE;
 //					S9xUpdateAPUTimer();
 #ifdef SETA010_HDMA_FROM_CART
 					S9xSetPPU (S9xGetByte (HDMARawPointers [d]), 0x2100 + p->BAddress);
@@ -1041,7 +946,7 @@ uint8 S9xDoHDMA (uint8 byte) {
 					break;
 				case 3:
 				case 7:
-					CPU.Cycles += 4*SLOW_ONE_CYCLE;
+					CPUPack.CPU.Cycles += 4*SLOW_ONE_CYCLE;
 //					S9xUpdateAPUTimer();
 #ifdef SETA010_HDMA_FROM_CART
 					S9xSetPPU (S9xGetByte (HDMARawPointers [d]), 0x2100 + p->BAddress);
@@ -1058,7 +963,7 @@ uint8 S9xDoHDMA (uint8 byte) {
 					HDMAMemPointers [d] += 4;
 					break;
 				case 4:
-					CPU.Cycles += 4*SLOW_ONE_CYCLE;
+					CPUPack.CPU.Cycles += 4*SLOW_ONE_CYCLE;
 //					S9xUpdateAPUTimer();
 #ifdef SETA010_HDMA_FROM_CART
 					S9xSetPPU (S9xGetByte (HDMARawPointers [d]), 0x2100 + p->BAddress);
@@ -1084,7 +989,7 @@ uint8 S9xDoHDMA (uint8 byte) {
 			p->LineCount--;
 		}
 	}
-	CPU.InDMA=FALSE;
+	CPUPack.CPU.InDMA=FALSE;
 	return (byte);
 }
 

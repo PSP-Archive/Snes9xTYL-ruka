@@ -844,9 +844,9 @@ int net_waitpause_state(int show_menu){
 	before_pause();		
 	if (show_menu) {
 		if (!os9x_lowbat) {
-			if (CPU.SRAMModified) {
+			if (CPUPack.CPU.SRAMModified) {
 				Memory.SaveSRAM( (char*)S9xGetSaveFilename(".SRM") );
-				CPU.SRAMModified=0;
+				CPUPack.CPU.SRAMModified=0;
 			}
 		}
 		//initUSBdrivers();

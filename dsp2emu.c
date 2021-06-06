@@ -73,6 +73,8 @@
   Nintendo Co., Limited and its subsidiary companies.
 *******************************************************************************/
 
+#ifndef PSP
+
 uint16 DSP2Op09Word1=0;
 uint16 DSP2Op09Word2=0;
 bool DSP2Op05HasLen=false;
@@ -324,3 +326,4 @@ void DSP2_Op0D()
 }
 
 #endif
+#endif // PSP

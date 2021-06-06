@@ -720,7 +720,7 @@ int adhocRecv(void *buffer, unsigned int *length)
 					mac,
 					&port,
 					buffer,
-					&length,
+					length,
 					0,	// 0 in lumines
 					1);	// 1 in lumines
 		if(err<0)

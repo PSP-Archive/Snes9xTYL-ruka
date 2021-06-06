@@ -57,80 +57,80 @@
 extern char str_tmp[256];
 
 #define FLAGS_NMI() \
-				if (--CPU.NMICycleCount == 0) {\
-		  		CPU.Flags &= ~NMI_FLAG;\
-		  		if (CPU.WaitingForInterrupt) {\
-		      	CPU.WaitingForInterrupt = FALSE;\
-		      	CPU.PC++;\
+				if (--CPUPack.CPU.NMICycleCount == 0) {\
+		  		CPUPack.CPU.Flags &= ~NMI_FLAG;\
+		  		if (CPUPack.CPU.WaitingForInterrupt) {\
+		      	CPUPack.CPU.WaitingForInterrupt = FALSE;\
+		      	CPUPack.CPU.PC++;\
 		    	}\
 		  		S9xOpcode_NMI ();\
 				}
 #define FLAGS_IRQ() \
-				if (CPU.IRQCycleCount == 0) {\
-		  		if (CPU.WaitingForInterrupt) {\
-		      	CPU.WaitingForInterrupt = FALSE;\
-		      	CPU.PC++;\
+				if (CPUPack.CPU.IRQCycleCount == 0) {\
+		  		if (CPUPack.CPU.WaitingForInterrupt) {\
+		      	CPUPack.CPU.WaitingForInterrupt = FALSE;\
+		      	CPUPack.CPU.PC++;\
 		    	}\
-		  		if (CPU.IRQActive && !Settings.DisableIRQ) {\
+		  		if (CPUPack.CPU.IRQActive && !Settings.DisableIRQ) {\
 		      	if (!CheckFlag (IRQ)) S9xOpcode_IRQ ();\
-		    	} else CPU.Flags &= ~IRQ_PENDING_FLAG;\
-				} else CPU.IRQCycleCount--;
+		    	} else CPUPack.CPU.Flags &= ~IRQ_PENDING_FLAG;\
+				} else CPUPack.CPU.IRQCycleCount--;
 #define FLAGS_SCAN_KEYS_FLAG() return
 			
-
-
 void (*S9x_Current_HBlank_Event)();
 
 void S9xMainLoop_SA1_APU (void) {
 	for (;;) { 
 		//APU_EXECUTE ();
-		if (IAPU->APUExecuting) {			
-			cpu_glob_cycles += CPU.Cycles-old_cpu_cycles;
-			old_cpu_cycles=CPU.Cycles;
-			*apu_glob_cycles=cpu_glob_cycles;
+
+      SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);
+	  if ((pEvent->IAPU_APUExecuting)) {
+			cpu_glob_cycles += CPUPack.CPU.Cycles-old_cpu_cycles;
+			old_cpu_cycles=CPUPack.CPU.Cycles;
+			pEvent->apu_glob_cycles=cpu_glob_cycles;
 			
 			if (cpu_glob_cycles>=0x00700000) {		
 				APU_EXECUTE2 ();
 			}
 		}
 		
-    if (CPU.Flags) {
-	  	if (CPU.Flags & NMI_FLAG) {
-	      if (--CPU.NMICycleCount == 0) {
-		  		CPU.Flags &= ~NMI_FLAG;
-		  		if (CPU.WaitingForInterrupt) {
-		      	CPU.WaitingForInterrupt = FALSE;
-		      	CPU.PC++;
+    if (CPUPack.CPU.Flags) {
+	  	if (CPUPack.CPU.Flags & NMI_FLAG) {
+	      if (--CPUPack.CPU.NMICycleCount == 0) {
+		  		CPUPack.CPU.Flags &= ~NMI_FLAG;
+		  		if (CPUPack.CPU.WaitingForInterrupt) {
+		      	CPUPack.CPU.WaitingForInterrupt = FALSE;
+		      	CPUPack.CPU.PC++;
 		    	}
 		  		S9xOpcode_NMI ();
 				}
 	    }
 
-	  	if (CPU.Flags & IRQ_PENDING_FLAG) {
-	      if (CPU.IRQCycleCount == 0) {
-		  		if (CPU.WaitingForInterrupt) {
-		      	CPU.WaitingForInterrupt = FALSE;
-		      	CPU.PC++;
+	  	if (CPUPack.CPU.Flags & IRQ_PENDING_FLAG) {
+	      if (CPUPack.CPU.IRQCycleCount == 0) {
+		  		if (CPUPack.CPU.WaitingForInterrupt) {
+		      	CPUPack.CPU.WaitingForInterrupt = FALSE;
+		      	CPUPack.CPU.PC++;
 		    	}
-		  		if (CPU.IRQActive && !Settings.DisableIRQ) {
+		  		if (CPUPack.CPU.IRQActive && !Settings.DisableIRQ) {
 		      	if (!CheckFlag (IRQ)) S9xOpcode_IRQ ();
-		    	} else CPU.Flags &= ~IRQ_PENDING_FLAG;
-				} else CPU.IRQCycleCount--;
+		    	} else CPUPack.CPU.Flags &= ~IRQ_PENDING_FLAG;
+				} else CPUPack.CPU.IRQCycleCount--;
 	    }
-	  	if (CPU.Flags & SCAN_KEYS_FLAG) break;
+	  	if (CPUPack.CPU.Flags & SCAN_KEYS_FLAG) break;
 		}
 
 		#ifdef CPU_SHUTDOWN
-    CPU.PCAtOpcodeStart = CPU.PC;
+    CPUPack.CPU.PCAtOpcodeStart = CPUPack.CPU.PC;
 		#endif
 				
-    CPU.Cycles += CPU.MemSpeed;
+    CPUPack.CPU.Cycles += CPUPack.CPU.MemSpeed;
 
-    (*ICPU.S9xOpcodes[*CPU.PC++].S9xOpcode) ();
+    (*CPUPack.ICPU.S9xOpcodes[*CPUPack.CPU.PC++].S9xOpcode) ();
 
     //S9xUpdateAPUTimer ();
 
-    if (SA1.Executing) S9xSA1MainLoop ();
+    if (SA1Pack.SA1.Executing) S9xSA1MainLoop ();
       
     DO_HBLANK_CHECK ();
   }
@@ -141,49 +141,50 @@ void S9xMainLoop_SA1_APU (void) {
 void S9xMainLoop_NoSA1_APU (void) {
 	for (;;) {
 		//APU_EXECUTE ();				
-		if (IAPU->APUExecuting) {
-			if (CPU.Cycles-old_cpu_cycles<0) msgBoxLines("1",60);
-			else cpu_glob_cycles += CPU.Cycles-old_cpu_cycles;
-			old_cpu_cycles=CPU.Cycles;
-			*apu_glob_cycles=cpu_glob_cycles;
+  SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);
+  if ((pEvent->IAPU_APUExecuting)) {
+			/*if (CPUPack.CPU.Cycles-old_cpu_cycles<0) msgBoxLines("1",60);
+			else */cpu_glob_cycles += CPUPack.CPU.Cycles-old_cpu_cycles;
+			old_cpu_cycles=CPUPack.CPU.Cycles;
+			pEvent->apu_glob_cycles=cpu_glob_cycles;
 			
 			if (cpu_glob_cycles>=0x00700000) {		
 				APU_EXECUTE2 ();
 			}
 		}
 		
-    if (CPU.Flags) {
-	  	if (CPU.Flags & NMI_FLAG) {
-	      if (--CPU.NMICycleCount == 0) {
-		  		CPU.Flags &= ~NMI_FLAG;
-		  		if (CPU.WaitingForInterrupt) {
-		      	CPU.WaitingForInterrupt = FALSE;
-		      	CPU.PC++;
+    if (CPUPack.CPU.Flags) {
+	  	if (CPUPack.CPU.Flags & NMI_FLAG) {
+	      if (--CPUPack.CPU.NMICycleCount == 0) {
+		  		CPUPack.CPU.Flags &= ~NMI_FLAG;
+		  		if (CPUPack.CPU.WaitingForInterrupt) {
+		      	CPUPack.CPU.WaitingForInterrupt = FALSE;
+		      	CPUPack.CPU.PC++;
 		    	}
 		  		S9xOpcode_NMI ();
 				}
 	    }
 
-	  	if (CPU.Flags & IRQ_PENDING_FLAG) {
-	      if (CPU.IRQCycleCount == 0) {
-		  		if (CPU.WaitingForInterrupt) {
-		      	CPU.WaitingForInterrupt = FALSE;
-		      	CPU.PC++;
+	  	if (CPUPack.CPU.Flags & IRQ_PENDING_FLAG) {
+	      if (CPUPack.CPU.IRQCycleCount == 0) {
+		  		if (CPUPack.CPU.WaitingForInterrupt) {
+		      	CPUPack.CPU.WaitingForInterrupt = FALSE;
+		      	CPUPack.CPU.PC++;
 		    	}
-		  		if (CPU.IRQActive && !Settings.DisableIRQ) {
+		  		if (CPUPack.CPU.IRQActive && !Settings.DisableIRQ) {
 		      	if (!CheckFlag (IRQ)) S9xOpcode_IRQ ();
-		    	} else CPU.Flags &= ~IRQ_PENDING_FLAG;
-				} else CPU.IRQCycleCount--;
+		    	} else CPUPack.CPU.Flags &= ~IRQ_PENDING_FLAG;
+				} else CPUPack.CPU.IRQCycleCount--;
 	    }
-	  	if (CPU.Flags & SCAN_KEYS_FLAG) break;
+	  	if (CPUPack.CPU.Flags & SCAN_KEYS_FLAG) break;
 		}
 
 		#ifdef CPU_SHUTDOWN
-    CPU.PCAtOpcodeStart = CPU.PC;
+    CPUPack.CPU.PCAtOpcodeStart = CPUPack.CPU.PC;
 		#endif
-    CPU.Cycles += CPU.MemSpeed;
+    CPUPack.CPU.Cycles += CPUPack.CPU.MemSpeed;
 
-    (*ICPU.S9xOpcodes[*CPU.PC++].S9xOpcode) ();
+    (*CPUPack.ICPU.S9xOpcodes[*CPUPack.CPU.PC++].S9xOpcode) ();
 
     DO_HBLANK_CHECK ();
   } 
@@ -193,39 +194,39 @@ void S9xMainLoop_NoSA1_APU (void) {
 
 void S9xMainLoop_SA1_NoAPU (void) {
 	for (;;) {		
-    if (CPU.Flags) {
-	  	if (CPU.Flags & NMI_FLAG) {
-	      if (--CPU.NMICycleCount == 0) {
-		  		CPU.Flags &= ~NMI_FLAG;
-		  		if (CPU.WaitingForInterrupt) {
-		      	CPU.WaitingForInterrupt = FALSE;
-		      	CPU.PC++;
+    if (CPUPack.CPU.Flags) {
+	  	if (CPUPack.CPU.Flags & NMI_FLAG) {
+	      if (--CPUPack.CPU.NMICycleCount == 0) {
+		  		CPUPack.CPU.Flags &= ~NMI_FLAG;
+		  		if (CPUPack.CPU.WaitingForInterrupt) {
+		      	CPUPack.CPU.WaitingForInterrupt = FALSE;
+		      	CPUPack.CPU.PC++;
 		    	}
 		  		S9xOpcode_NMI ();
 				}
 	    }
 
-	  	if (CPU.Flags & IRQ_PENDING_FLAG) {
-	      if (CPU.IRQCycleCount == 0) {
-		  		if (CPU.WaitingForInterrupt) {
-		      	CPU.WaitingForInterrupt = FALSE;
-		      	CPU.PC++;
+	  	if (CPUPack.CPU.Flags & IRQ_PENDING_FLAG) {
+	      if (CPUPack.CPU.IRQCycleCount == 0) {
+		  		if (CPUPack.CPU.WaitingForInterrupt) {
+		      	CPUPack.CPU.WaitingForInterrupt = FALSE;
+		      	CPUPack.CPU.PC++;
 		    	}
-		  		if (CPU.IRQActive && !Settings.DisableIRQ) {
+		  		if (CPUPack.CPU.IRQActive && !Settings.DisableIRQ) {
 		      	if (!CheckFlag (IRQ)) S9xOpcode_IRQ ();
-		    	} else CPU.Flags &= ~IRQ_PENDING_FLAG;
-				} else CPU.IRQCycleCount--;
+		    	} else CPUPack.CPU.Flags &= ~IRQ_PENDING_FLAG;
+				} else CPUPack.CPU.IRQCycleCount--;
 	    }
-	  	if (CPU.Flags & SCAN_KEYS_FLAG) break;
+	  	if (CPUPack.CPU.Flags & SCAN_KEYS_FLAG) break;
 		}
 
 		#ifdef CPU_SHUTDOWN
-    CPU.PCAtOpcodeStart = CPU.PC;
+    CPUPack.CPU.PCAtOpcodeStart = CPUPack.CPU.PC;
 		#endif
-    CPU.Cycles += CPU.MemSpeed;
+    CPUPack.CPU.Cycles += CPUPack.CPU.MemSpeed;
 
-    (*ICPU.S9xOpcodes[*CPU.PC++].S9xOpcode) ();
-    if (SA1.Executing) S9xSA1MainLoop ();
+    (*CPUPack.ICPU.S9xOpcodes[*CPUPack.CPU.PC++].S9xOpcode) ();
+    if (SA1Pack.SA1.Executing) S9xSA1MainLoop ();
       
     DO_HBLANK_CHECK ();
   }
@@ -233,38 +234,38 @@ void S9xMainLoop_SA1_NoAPU (void) {
 
 void S9xMainLoop_NoSA1_NoAPU (void) {
 	for (;;) {
-    if (CPU.Flags) {
-	  	if (CPU.Flags & NMI_FLAG) {
-	      if (--CPU.NMICycleCount == 0) {
-		  		CPU.Flags &= ~NMI_FLAG;
-		  		if (CPU.WaitingForInterrupt) {
-		      	CPU.WaitingForInterrupt = FALSE;
-		      	CPU.PC++;
+    if (CPUPack.CPU.Flags) {
+	  	if (CPUPack.CPU.Flags & NMI_FLAG) {
+	      if (--CPUPack.CPU.NMICycleCount == 0) {
+		  		CPUPack.CPU.Flags &= ~NMI_FLAG;
+		  		if (CPUPack.CPU.WaitingForInterrupt) {
+		      	CPUPack.CPU.WaitingForInterrupt = FALSE;
+		      	CPUPack.CPU.PC++;
 		    	}
 		  		S9xOpcode_NMI ();
 				}
 	    }
 
-	  	if (CPU.Flags & IRQ_PENDING_FLAG) {
-	      if (CPU.IRQCycleCount == 0) {
-		  		if (CPU.WaitingForInterrupt) {
-		      	CPU.WaitingForInterrupt = FALSE;
-		      	CPU.PC++;
+	  	if (CPUPack.CPU.Flags & IRQ_PENDING_FLAG) {
+	      if (CPUPack.CPU.IRQCycleCount == 0) {
+		  		if (CPUPack.CPU.WaitingForInterrupt) {
+		      	CPUPack.CPU.WaitingForInterrupt = FALSE;
+		      	CPUPack.CPU.PC++;
 		    	}
-		  		if (CPU.IRQActive && !Settings.DisableIRQ) {
+		  		if (CPUPack.CPU.IRQActive && !Settings.DisableIRQ) {
 		      	if (!CheckFlag (IRQ)) S9xOpcode_IRQ ();
-		    	} else CPU.Flags &= ~IRQ_PENDING_FLAG;
-				} else CPU.IRQCycleCount--;
+		    	} else CPUPack.CPU.Flags &= ~IRQ_PENDING_FLAG;
+				} else CPUPack.CPU.IRQCycleCount--;
 	    }
-	  	if (CPU.Flags & SCAN_KEYS_FLAG) break;
+	  	if (CPUPack.CPU.Flags & SCAN_KEYS_FLAG) break;
 		}
 
 		#ifdef CPU_SHUTDOWN
-    CPU.PCAtOpcodeStart = CPU.PC;
+    CPUPack.CPU.PCAtOpcodeStart = CPUPack.CPU.PC;
 		#endif
-    CPU.Cycles += CPU.MemSpeed;
+    CPUPack.CPU.Cycles += CPUPack.CPU.MemSpeed;
 
-    (*ICPU.S9xOpcodes[*CPU.PC++].S9xOpcode) ();
+    (*CPUPack.ICPU.S9xOpcodes[*CPUPack.CPU.PC++].S9xOpcode) ();
       
     DO_HBLANK_CHECK ();
   }
@@ -292,18 +293,18 @@ void S9xMainLoop (void)
 	}		
 #endif	
 	
-  Registers.PC = CPU.PC - CPU.PCBase;
+  CPUPack.Registers.PC = CPUPack.CPU.PC - CPUPack.CPU.PCBase;
     
   S9xPackStatus ();
       
-  if (CPU.Flags & SCAN_KEYS_FLAG) {
+  if (CPUPack.CPU.Flags & SCAN_KEYS_FLAG) {
     FINISH_PROFILE_FUNC (S9xMainLoop);
     S9xSyncSpeed ();
-    CPU.Flags &= ~SCAN_KEYS_FLAG;
+    CPUPack.CPU.Flags &= ~SCAN_KEYS_FLAG;
   }
-  if (CPU.BRKTriggered && Settings.SuperFX && !CPU.TriedInterleavedMode2) {
-    CPU.TriedInterleavedMode2 = TRUE;
-    CPU.BRKTriggered = FALSE;
+  if (CPUPack.CPU.BRKTriggered && Settings.SuperFX && !CPUPack.CPU.TriedInterleavedMode2) {
+    CPUPack.CPU.TriedInterleavedMode2 = TRUE;
+    CPUPack.CPU.BRKTriggered = FALSE;
     S9xDeinterleaveMode2 ();
   }
 
@@ -314,16 +315,16 @@ void S9xMainLoop (void)
 void
 S9xSetIRQ (uint32 source)
 {
-  CPU.IRQActive |= source;
-  CPU.Flags |= IRQ_PENDING_FLAG;
-  CPU.IRQCycleCount = 3;
-  if (CPU.WaitingForInterrupt)
+  CPUPack.CPU.IRQActive |= source;
+  CPUPack.CPU.Flags |= IRQ_PENDING_FLAG;
+  CPUPack.CPU.IRQCycleCount = 3;
+  if (CPUPack.CPU.WaitingForInterrupt)
     {
       // Force IRQ to trigger immediately after WAI - 
       // Final Fantasy Mystic Quest crashes without this.
-      CPU.IRQCycleCount = 0;
-      CPU.WaitingForInterrupt = FALSE;
-      CPU.PC++;
+      CPUPack.CPU.IRQCycleCount = 0;
+      CPUPack.CPU.WaitingForInterrupt = FALSE;
+      CPUPack.CPU.PC++;
     }
 }
 
@@ -338,10 +339,10 @@ S9xDoHBlankProcessing_HBLANK_START_EVENT ()
 {
 	//START_PROFILE_FUNC (S9xDoHBlankProcessing);
 #ifdef CPU_SHUTDOWN
-  CPU.WaitCounter++;
+  CPUPack.CPU.WaitCounter++;
 #endif
 
-  if (IPPU.HDMA && CPU.V_Counter <= PPU.ScreenHeight) IPPU.HDMA = S9xDoHDMA (IPPU.HDMA);
+  if (IPPU.HDMA && CPUPack.CPU.V_Counter <= PPU.ScreenHeight) IPPU.HDMA = S9xDoHDMA (IPPU.HDMA);
   S9xReschedule ();
   //FINISH_PROFILE_FUNC (S9xDoHBlankProcessing); 
 }
@@ -350,20 +351,21 @@ void
 S9xDoHBlankProcessing_HBLANK_END_EVENT () {
 	//START_PROFILE_FUNC (S9xDoHBlankProcessing);			
 #ifdef CPU_SHUTDOWN
-  CPU.WaitCounter++;
+  CPUPack.CPU.WaitCounter++;
 #endif
   if (Settings.SuperFX) S9xSuperFXExec ();
   	  
 
-	cpu_glob_cycles += CPU.Cycles-old_cpu_cycles;		
-	CPU.Cycles -= Settings.H_Max;	
-	old_cpu_cycles=CPU.Cycles;
+	cpu_glob_cycles += CPUPack.CPU.Cycles-old_cpu_cycles;		
+	CPUPack.CPU.Cycles -= Settings.H_Max;	
+	old_cpu_cycles=CPUPack.CPU.Cycles;
 	
 			
   //(IAPUuncached->NextAPUTimerPos) -= (Settings.H_Max * 10000L);      
-  if (  (IAPUuncached->APUExecuting)) {
-  	//(APUuncached->Cycles) -= Settings.H_Max;
-		*apu_glob_cycles=cpu_glob_cycles;
+  SAPUEVENTS *pEvent = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);
+  if (  (pEvent->IAPU_APUExecuting)) {
+  	//(APU->Cycles) -= Settings.H_Max;
+		pEvent->apu_glob_cycles=cpu_glob_cycles;
 #ifdef ME_SOUND		
 		if (cpu_glob_cycles>=0x00700000) {		
 			APU_EXECUTE2 ();
@@ -375,32 +377,38 @@ S9xDoHBlankProcessing_HBLANK_END_EVENT () {
 #endif		
   }
   else {
-  	//(APUuncached->Cycles) = 0;
-  	*apu_glob_cycles=0;
-  	APUuncached->Cycles = 0;
+  	//(APU->Cycles) = 0;
+	pEvent->apu_glob_cycles=0;
+  	pEvent->APU_Cycles = 0;
   }
   
         
-  CPU.NextEvent = -1;
-  ICPU.Scanline++;
+  CPUPack.CPU.NextEvent = -1;
+// not use
+//  CPUPack.ICPU.Scanline++;
 
-  if (++CPU.V_Counter > (Settings.PAL ? SNES_MAX_PAL_VCOUNTER : SNES_MAX_NTSC_VCOUNTER)) {
+  if (++CPUPack.CPU.V_Counter > (Settings.PAL ? SNES_MAX_PAL_VCOUNTER : SNES_MAX_NTSC_VCOUNTER)) {
   	//PPU.OAMAddr = PPU.SavedOAMAddr;
     //PPU.OAMFlip = 0;            
-    CPU.V_Counter = 0;
+    CPUPack.CPU.V_Counter = 0;
     FillRAM[0x213F]^=0x80;
-    CPU.NMIActive = FALSE;
-    ICPU.Frame++;
+    CPUPack.CPU.NMIActive = FALSE;
+    //CPUPack.ICPU.Frame++;
     PPU.HVBeamCounterLatched = 0;
-    CPU.Flags |= SCAN_KEYS_FLAG;
+    CPUPack.CPU.Flags |= SCAN_KEYS_FLAG;
     S9xStartHDMA ();
   }
 
-  if (PPU.VTimerEnabled && !PPU.HTimerEnabled && CPU.V_Counter == PPU.IRQVBeamPos) S9xSetIRQ (PPU_V_BEAM_IRQ_SOURCE);
-    
-  apu_event1[(*apu_event1_cpt2)&(65536*2-1)]=cpu_glob_cycles * os9x_apu_ratio / 256;
-  (*apu_event1_cpt2)++;
-  
+  if (PPU.VTimerEnabled && !PPU.HTimerEnabled && CPUPack.CPU.V_Counter == PPU.IRQVBeamPos) S9xSetIRQ (PPU_V_BEAM_IRQ_SOURCE);
+//  pEvent->apu_event1[pEvent->apu_event1_cpt2 & 0xFFFF]=(os9x_apu_ratio != 256) ? cpu_glob_cycles * os9x_apu_ratio / 256: cpu_glob_cycles;
+//  pEvent->apu_event1_cpt2++;
+  uint32 EventVal = (os9x_apu_ratio != 256) ? cpu_glob_cycles * os9x_apu_ratio / 256: cpu_glob_cycles;
+  if (CPUPack.CPU.V_Counter & 1) {
+    EventVal |= 0x80000000;
+  }
+  pEvent->apu_event1[pEvent->apu_event1_cpt2 & 0xFFFF] = EventVal;
+  pEvent->apu_event1_cpt2++;
+
   //APU_EXECUTE2 ();
     
   /*if ((APUuncached->TimerEnabled) [2]) {
@@ -414,9 +422,9 @@ S9xDoHBlankProcessing_HBLANK_END_EVENT () {
 #endif		
 		}
 	}*/
-	if (CPU.V_Counter & 1) {		
-		apu_event2[(*apu_event2_cpt2)&(65536*2-1)]=cpu_glob_cycles * os9x_apu_ratio / 256;  
-  	(*apu_event2_cpt2)++;
+//	if (CPUPack.CPU.V_Counter & 1) {		
+//		pEvent->apu_event2[pEvent->apu_event2_cpt2 & 0xFFFF]=(os9x_apu_ratio != 256) ? cpu_glob_cycles * os9x_apu_ratio / 256: cpu_glob_cycles;  
+//  		pEvent->apu_event2_cpt2++;
 		/*if ((APUuncached->TimerEnabled) [0]) {
 		  (APUuncached->Timer) [0]++;
 		  if ((APUuncached->Timer) [0] >= (APUuncached->TimerTarget) [0]) {
@@ -439,24 +447,24 @@ S9xDoHBlankProcessing_HBLANK_END_EVENT () {
 #endif		    
 		  }
 		}*/		
-	}	  
+//	}	  
 	
-  if (CPU.V_Counter == FIRST_VISIBLE_LINE)
+  if (CPUPack.CPU.V_Counter == FIRST_VISIBLE_LINE)
     {
       FillRAM[0x4210] = 0;
-      CPU.Flags &= ~NMI_FLAG;
+      CPUPack.CPU.Flags &= ~NMI_FLAG;
       S9xStartScreenRefresh ();
     }
-  if (CPU.V_Counter >= FIRST_VISIBLE_LINE &&
-      CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE)
+  if (CPUPack.CPU.V_Counter >= FIRST_VISIBLE_LINE &&
+      CPUPack.CPU.V_Counter < PPU.ScreenHeight + FIRST_VISIBLE_LINE)
     {
-      RenderLine (CPU.V_Counter - FIRST_VISIBLE_LINE);
+      RenderLine (CPUPack.CPU.V_Counter - FIRST_VISIBLE_LINE);
       S9xReschedule ();                  
   		//FINISH_PROFILE_FUNC (S9xDoHBlankProcessing); 
   		return;
     }
 
-  if (CPU.V_Counter == PPU.ScreenHeight + FIRST_VISIBLE_LINE)
+  if (CPUPack.CPU.V_Counter == PPU.ScreenHeight + FIRST_VISIBLE_LINE)
     {
       // Start of V-blank
       S9xEndScreenRefresh ();
@@ -481,9 +489,9 @@ S9xDoHBlankProcessing_HBLANK_END_EVENT () {
 
       FillRAM[0x4210] = 0x80;
       if (FillRAM[0x4200] & 0x80) {
-	  		CPU.NMIActive = TRUE;
-	  		CPU.Flags |= NMI_FLAG;
-	  		CPU.NMICycleCount = CPU.NMITriggerPoint;
+	  		CPUPack.CPU.NMIActive = TRUE;
+	  		CPUPack.CPU.Flags |= NMI_FLAG;
+	  		CPUPack.CPU.NMICycleCount = CPUPack.CPU.NMITriggerPoint;
 			}
 
 			S9xReschedule ();
@@ -491,7 +499,7 @@ S9xDoHBlankProcessing_HBLANK_END_EVENT () {
   		return;
     }
 
-  if (CPU.V_Counter == PPU.ScreenHeight + 3)
+  if (CPUPack.CPU.V_Counter == PPU.ScreenHeight + 3)
     S9xUpdateJoypads ();
 
   
@@ -504,9 +512,9 @@ S9xDoHBlankProcessing_HTIMER_BEFORE_EVENT ()
 {
 	//START_PROFILE_FUNC (S9xDoHBlankProcessing);
 #ifdef CPU_SHUTDOWN
-  CPU.WaitCounter++;
+  CPUPack.CPU.WaitCounter++;
 #endif
-  if (PPU.HTimerEnabled && (!PPU.VTimerEnabled || CPU.V_Counter == PPU.IRQVBeamPos)){
+  if (PPU.HTimerEnabled && (!PPU.VTimerEnabled || CPUPack.CPU.V_Counter == PPU.IRQVBeamPos)){
     S9xSetIRQ (PPU_H_BEAM_IRQ_SOURCE);
   }
   S9xReschedule ();
@@ -518,9 +526,9 @@ S9xDoHBlankProcessing_HTIMER_AFTER_EVENT ()
 {
 	//START_PROFILE_FUNC (S9xDoHBlankProcessing);
 #ifdef CPU_SHUTDOWN
-  CPU.WaitCounter++;
+  CPUPack.CPU.WaitCounter++;
 #endif
-  if (PPU.HTimerEnabled && (!PPU.VTimerEnabled || CPU.V_Counter == PPU.IRQVBeamPos)) {
+  if (PPU.HTimerEnabled && (!PPU.VTimerEnabled || CPUPack.CPU.V_Counter == PPU.IRQVBeamPos)) {
     S9xSetIRQ (PPU_H_BEAM_IRQ_SOURCE);
   }
   S9xReschedule ();

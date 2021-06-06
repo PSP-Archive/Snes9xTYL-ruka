@@ -66,7 +66,9 @@ extern int g_debuginfo;
 //	#undef  ZLIB
 	#define ZLIB
 	#define UNZIP_SUPPORT
-	
+	#define NOT_SUPPORT_MOUSE
+	#define NOT_SUPPORT_SUPRESCOPE
+
 	//#define SPC700_SHUTDOWN
 	#define CPU_SHUTDOWN
 	#define VAR_CYCLES

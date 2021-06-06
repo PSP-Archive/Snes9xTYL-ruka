@@ -623,7 +623,7 @@ void pspDrawBackgroundMosaic (uint32 BGMode, uint32 bg, uint8 Z1, uint8 Z2) {
   uint32 OffsetMask;
   uint32 OffsetShift;
 
-  if (BG.TileSize == 16) {
+  if (BG.TileSizeIs16) {
 		OffsetMask = 0x3ff;
 		OffsetShift = 4;
   } else {
@@ -681,7 +681,7 @@ void pspDrawBackgroundMosaic (uint32 BGMode, uint32 bg, uint8 Z1, uint8 Z2) {
 
 				if (x + PixWidth >= Right) PixWidth = Right - x;
 
-				if (BG.TileSize == 8) {
+				if (!BG.TileSizeIs16) {
 		    	if (Quot > 31) t = b2 + (Quot & 0x1f);
 		    	else t = b1 + Quot;
 				} else {
@@ -694,7 +694,7 @@ void pspDrawBackgroundMosaic (uint32 BGMode, uint32 bg, uint8 Z1, uint8 Z2) {
 				realZ1=(int)GFX.Z1;realZ2=(int)GFX.Z2;
 
 				// pspDraw tile...
-				if (BG.TileSize != 8)	{
+				if (BG.TileSizeIs16)	{
 		    	if (Tile & H_FLIP) {
 						// Horizontal flip, but what about vertical flip ?
 						if (Tile & V_FLIP) {
@@ -750,7 +750,7 @@ void pspDrawBackgroundMode5 (uint32 /* BGMODE */, uint32 bg, uint8 Z1, uint8 Z2)
 
   GFX.Pitch = GFX.RealPitch;
   GFX.PPL = GFX.PPLx2 >> 1;
-  GFX.PixSize = 1;
+//  GFX.PixSize = 1;
   uint8 depths [2] = {Z1, Z2};
 
   uint32 Tile;
@@ -812,7 +812,7 @@ void pspDrawBackgroundMode5 (uint32 /* BGMODE */, uint32 bg, uint8 Z1, uint8 Z2)
 	int VOffsetMask;
   int VOffsetShift;
 
-  if (BG.TileSize == 16) {
+  if (BG.TileSizeIs16) {
 		VOffsetMask = 0x3ff;
 		VOffsetShift = 4;
   } else {
@@ -872,7 +872,7 @@ void pspDrawBackgroundMode5 (uint32 /* BGMODE */, uint32 bg, uint8 Z1, uint8 Z2)
 	    //uint32 s = (Left>>1) * GFX.PixSize + Y * 256;//GFX.PPL;
 	    s32 Xt=Left>>1;
 	    s32 Yt=Y;
-	    uint32 HPos = (HOffset + Left * GFX.PixSize) & 0x3ff;
+	    uint32 HPos = (HOffset + Left/* * GFX.PixSize*/) & 0x3ff;
 
 	    uint32 Quot = HPos >> 3;
 	    uint32 Count = 0;
@@ -893,7 +893,7 @@ void pspDrawBackgroundMode5 (uint32 /* BGMODE */, uint32 bg, uint8 Z1, uint8 Z2)
 				GFX.Z1 = GFX.Z2 = depths [(Tile & 0x2000) >> 13];
 				realZ1=(int)GFX.Z1;realZ2=(int)GFX.Z2;
 	
-				if (BG.TileSize == 8) {
+				if (!BG.TileSizeIs16) {
 		    	if (!(Tile & H_FLIP)) {
 						// Normal, unflipped
 						pspDrawHiResClippedTile16 (Tile + (Quot & 1), Xt,Yt, Offset, Count, VirtAlign, Lines);
@@ -936,7 +936,7 @@ void pspDrawBackgroundMode5 (uint32 /* BGMODE */, uint32 bg, uint8 Z1, uint8 Z2)
 				Tile = READ_2BYTES(t);
 				GFX.Z1 = GFX.Z2 = depths [(Tile & 0x2000) >> 13];
 				realZ1=(int)GFX.Z1;realZ2=(int)GFX.Z2;
-				if (BG.TileSize == 8) {
+				if (!BG.TileSizeIs16) {
 		    	if (!(Tile & H_FLIP)) {
 						// Normal, unflipped
 						pspDrawHiResTile16 (Tile + (Quot & 1),Xt,Yt, VirtAlign, Lines);
@@ -972,7 +972,7 @@ void pspDrawBackgroundMode5 (uint32 /* BGMODE */, uint32 bg, uint8 Z1, uint8 Z2)
 				Tile = READ_2BYTES(t);
 				GFX.Z1 = GFX.Z2 = depths [(Tile & 0x2000) >> 13];
 				realZ1=(int)GFX.Z1;realZ2=(int)GFX.Z2;
-				if (BG.TileSize == 8) {
+				if (!BG.TileSizeIs16) {
 		    	if (!(Tile & H_FLIP)) {
 						// Normal, unflipped
 						pspDrawHiResClippedTile16 (Tile + (Quot & 1), Xt,Yt, 0, Count, VirtAlign, Lines);
@@ -1013,7 +1013,7 @@ void pspDrawBackgroundMode5 (uint32 /* BGMODE */, uint32 bg, uint8 Z1, uint8 Z2)
  
 
 void pspDrawBackground (uint32 BGMode, uint32 bg, uint8 Z1, uint8 Z2) {		
-  BG.TileSize = BGSizes [PPU.BG[bg].BGSize];
+  BG.TileSizeIs16 = PPU.BG[bg].BGSize;
   BG.BitShift = BitShifts[BGMode][bg];  
   BG.TileShift = TileShifts[BGMode][bg];
   BG.TileAddress = PPU.BG[bg].NameBase << 1;
@@ -1126,7 +1126,7 @@ info(32,10,str);
   int OffsetMask;
   int OffsetShift;
 
-  if (BG.TileSize == 16){
+  if (BG.TileSizeIs16){
 		OffsetMask = 0x3ff;
 		OffsetShift = 4;
 	}else{
@@ -1194,7 +1194,7 @@ info(32,1,st);
 	    uint32 Count = 0;
 	    
 	    uint16 *t;
-	    if (BG.TileSize == 8) {
+	    if (!BG.TileSizeIs16) {
 				if (Quot > 31) t = b2 + (Quot & 0x1f);
 				else t = b1 + Quot;
 	    } else {
@@ -1214,7 +1214,7 @@ info(32,1,st);
 				GFX.Z1 = GFX.Z2 = depths [(Tile & 0x2000) >> 13];
 				realZ1=(int)GFX.Z1;realZ2=(int)GFX.Z2;
 						
-				if (BG.TileSize == 8) pspDrawClippedTile16 (Tile, Xt,Yt, Offset, Count, VirtAlign, Lines);
+				if (!BG.TileSizeIs16) pspDrawClippedTile16 (Tile, Xt,Yt, Offset, Count, VirtAlign, Lines);
 				else {
 					if (!(Tile & (V_FLIP | H_FLIP))) {
 						// Normal, unflipped
@@ -1233,7 +1233,7 @@ info(32,1,st);
 					}
 				}
 
-				if (BG.TileSize == 8) {
+				if (!BG.TileSizeIs16) {
 		    	t++;
 		    	if (Quot == 31) t = b2;
 		    	else if (Quot == 63) t = b1;
@@ -1257,7 +1257,7 @@ info(32,1,st);
 				GFX.Z1 = GFX.Z2 = depths [(Tile & 0x2000) >> 13];
 				realZ1=(int)GFX.Z1;realZ2=(int)GFX.Z2;
 				
-				if (BG.TileSize != 8) {
+				if (BG.TileSizeIs16) {
 		    	if (Tile & H_FLIP) {
 						// Horizontal flip, but what about vertical flip ?
 						if (Tile & V_FLIP) {
@@ -1281,7 +1281,7 @@ info(32,1,st);
 		    	pspDrawTile16 (Tile, Xt,Yt, VirtAlign, Lines);		
 				}
 		
-				if (BG.TileSize == 8) {
+				if (!BG.TileSizeIs16) {
 		    	t++;
 		    	if (Quot == 31) t = b2;
 		    	else if (Quot == 63)
@@ -1298,7 +1298,7 @@ info(32,1,st);
 	    	GFX.Z1 = GFX.Z2 = depths [(Tile & 0x2000) >> 13];
 	    	realZ1=(int)GFX.Z1;realZ2=(int)GFX.Z2;
 				
-				if (BG.TileSize == 8) pspDrawClippedTile16 (Tile, Xt,Yt, 0, Count, VirtAlign, Lines);
+				if (!BG.TileSizeIs16) pspDrawClippedTile16 (Tile, Xt,Yt, 0, Count, VirtAlign, Lines);
 				else {
 		    	if (!(Tile & (V_FLIP | H_FLIP))) {
 						// Normal, unflipped
@@ -1510,8 +1510,9 @@ void pspS9xUpdateScreen (){
   uint32 endy = GFX.EndY;
     
   if (tile_cache_reset) tile_reset_cache();
+#if TILE_CACHE_RESET_ASK_MAX != 0
   else tile_resetask=0;    
-                
+#endif                
   if (GFX.Pseudo)	{
   	GFX.r2131 = 0x5f;
 	  GFX.r212d = (FillRAM [0x212c] ^ FillRAM [0x212d]) & 15;

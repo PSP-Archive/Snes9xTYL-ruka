@@ -1,9 +1,5 @@
  #define PASSWORD_XORED "watashihaos9xpspdesu."
 
-//#define __DEBUG_SNES_
-//#define __DEBUG__ROM__ "ms0:/PSP/GAME/s9xTYL                         1/ROMS/Final Fantasy VI (J)-teng.zip"
-//#define DEBUG_SAVE_SLOT ".za0"
-
 /*******************************************************************************
   Snes9x - Portable Super Nintendo Entertainment System (TM) emulator.
  
@@ -106,6 +102,7 @@
 #include "gfx.h"
 #include "soundux.h"
 #include "spc700.h"
+#include "psp/counter.h"
 //#include "spc7110.h"
 
 
@@ -343,6 +340,7 @@ typedef struct {
 	int *os9x_paused_ptr;
 	int exit;
 	int mixsample_flag;
+	uint32 dwDummy[4];	// aligned dummy
 	//uint8 *apu_ram;
 } me_sound_t;
 
@@ -478,7 +476,7 @@ void update_pad(){
 	if (os9x_netplay) {
 		char str[16];
 		
-		os9x_netcrc32[NET_DELAY-1][os9x_netpadindex]=caCRC32((uint8*)&Registers,sizeof(SRegisters))&0xFFFF;		
+		os9x_netcrc32[NET_DELAY-1][os9x_netpadindex]=caCRC32((uint8*)&CPUPack.Registers,sizeof(SRegisters))&0xFFFF;		
 		os9x_netsnespad[NET_DELAY-1][os9x_netpadindex]=os9x_snespad;
 		
 		if(os9x_conId==1) { //server
@@ -887,27 +885,27 @@ void S9xAutoSaveSRAM() {
 ////////////////////////////////////////////////////////////////////////////////////////
 bool8 S9xOpenSoundDevice( int mode, bool8 stereo, int buffer_size )
 {
-	(so->mute_sound)  = TRUE;
+	stSoundStatus.mute_sound  = TRUE;
 	if ( buffer_size <= 0 ){
 		return FALSE;
 	}
-	(so->sound_switch) = 255;
-	(so->buffer_size)  = buffer_size;
-	(so->encoded)      = FALSE;
+	stSoundStatus.sound_switch = 255;
+	stSoundStatus.buffer_size  = buffer_size;
+	stSoundStatus.encoded      = FALSE;
 	// Initialize channel and allocate buffer
-	(so->sound_fd) = sceAudioChReserve( -1, buffer_size, 0 );
-	if ( (so->sound_fd) < 0 ){
+	stSoundStatus.sound_fd = sceAudioChReserve( -1, buffer_size, 0 );
+	if ( stSoundStatus.sound_fd < 0 ){
 		return FALSE;
 	}
-		(so->buffer_size) *= 2;	
-		(so->buffer_size) *= 2;
-	if ( (so->buffer_size) > MAX_BUFFER_SIZE ){
-		(so->buffer_size) = MAX_BUFFER_SIZE;
+	stSoundStatus.buffer_size *= 2;	
+	stSoundStatus.buffer_size *= 2;
+	if ( stSoundStatus.buffer_size > MAX_BUFFER_SIZE ){
+		stSoundStatus.buffer_size = MAX_BUFFER_SIZE;
 	}
 	samples_error = 0;
 	current_SoundBuffer = 0;		
 	S9xSetPlaybackRate( Settings.SoundPlaybackRate  );
-	(so->mute_sound)  = FALSE;
+	stSoundStatus.mute_sound  = FALSE;
 	return TRUE;
 }
 
@@ -916,11 +914,118 @@ bool8 S9xOpenSoundDevice( int mode, bool8 stereo, int buffer_size )
 ////////////////////////////////////////////////////////////////////////////////////////
 void S9xCloseSoundDevice()
 {
-	if ( (so->sound_fd) >= 0 ){
-		sceAudioChRelease( (so->sound_fd) );
-		(so->sound_fd) = -1;
+	if ( stSoundStatus.sound_fd >= 0 ){
+		sceAudioChRelease( stSoundStatus.sound_fd );
+		stSoundStatus.sound_fd = -1;
 	}
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////
+// Synchronous process of me-CPU and main-CPU by ruka
+
+#ifdef ME_SOUND
+
+#define	EVENT_SUSPEND	0
+#define EVENT_RESUME	1
+
+#define QUEUE_MASK		0x0F
+
+typedef struct {
+	uint8 wSuspend;			// me:w main:r
+	uint8 wCallCount;		// me:w mian:r
+	uint8  bMainQueuePtr;	// me:r main rw
+	uint8  bMeQueuePtr;		// me rw
+	uint32 dwTimeout;		// me:rw
+	uint8 bMeWorking;		// me:w main:r
+	uint8 abQueueData[31];	// me:r main:w
+	uint32 dwDummy[6];		// aligned dummy
+}PROCESS_EVENT;
+
+volatile PROCESS_EVENT __attribute__((aligned(64))) g_stProcessEvent = {0}; // uncache access only
+#endif
+
+// main->call
+void S9xSuspendSoundProcess(void)
+{
+#ifdef ME_SOUND
+	volatile PROCESS_EVENT *pEvent = (PROCESS_EVENT *)UNCACHE_PTR(&g_stProcessEvent);
+	pEvent->abQueueData[pEvent->bMainQueuePtr] = EVENT_SUSPEND;
+	pEvent->bMainQueuePtr = (pEvent->bMainQueuePtr + 1) &QUEUE_MASK;
+	if (pEvent->bMeWorking) {
+		// waits until me starts suspending. 
+		while (!pEvent->wSuspend) {
+			{
+				pgPrintBG(0,7,0xFFFF,"maybe deadlock");
+				pgScreenFlipV();
+			}
+			;
+		}
+	}
+#endif
+}
+
+// main->call
+void S9xResumeSoundProcess(void)
+{
+#ifdef ME_SOUND
+	sceKernelDcacheWritebackInvalidateAll();
+	PROCESS_EVENT *pEvent = (PROCESS_EVENT *)UNCACHE_PTR(&g_stProcessEvent);
+	pEvent->abQueueData[pEvent->bMainQueuePtr] = EVENT_RESUME;
+	pEvent->bMainQueuePtr = (pEvent->bMainQueuePtr + 1) &QUEUE_MASK;
+#endif
+}
+
+
+#ifdef ME_SOUND
+// me->call
+void me_ProcessEvent(void)
+{
+	volatile PROCESS_EVENT *pEvent = (PROCESS_EVENT *)UNCACHE_PTR(&g_stProcessEvent);
+	if (pEvent->bMainQueuePtr == pEvent->bMeQueuePtr) {
+		return;
+	}
+	do {
+		// event
+		do {
+			switch (pEvent->abQueueData[pEvent->bMeQueuePtr]) {
+			case EVENT_SUSPEND:
+				// writeback cache
+				me_sceKernelDcacheWritebackInvalidateAll();
+				pEvent->wSuspend = true;
+				pEvent->wCallCount++;
+				pEvent->dwTimeout = 0xFFFFFFFF;
+				pEvent->dwDummy[0]++;
+				break;
+			case EVENT_RESUME:
+				if (pEvent->wCallCount >= 1) {
+					pEvent->wCallCount--;
+				}
+				if (pEvent->wCallCount == 0) {
+					pEvent->wSuspend = false;
+				}
+				pEvent->dwDummy[1]++;
+				break;
+			}
+			pEvent->bMeQueuePtr = (pEvent->bMeQueuePtr + 1) &QUEUE_MASK;
+		} while (pEvent->bMainQueuePtr != pEvent->bMeQueuePtr);
+		if (pEvent->wSuspend == false) {
+			pEvent->dwDummy[4]++;
+			return;
+		}
+		// timeout(fail safe)
+		pEvent->dwTimeout--;
+		if (pEvent->dwTimeout == 0) {
+			pEvent->wSuspend = false;
+			pEvent->dwDummy[3]++;
+			return;
+		}
+	} while (1);
+}
+#endif
+
+
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -930,58 +1035,17 @@ void S9xCloseSoundDevice()
 void me_MixSound(me_sound_t *p){	
 	int i;	
 	u32 *src,*dst;	
-	uint8 *apu_ram_save;
-	
-	apu_ram_save=IAPU->RAM;
-	memcpy(IAPU,IAPUuncached,sizeof(struct SIAPU));
-	IAPU->RAM=apu_ram_save;
-	memcpy(IAPU->RAM,IAPUuncached->RAM,0x10000);
-	
-	memcpy(APU,APUuncached,sizeof(struct SAPU));
-	//do it each time since it's updatable from menu
-	for (i = 0; i < 256; i++) S9xAPUCycles [i] = (int)S9xAPUCycleLengths [i] * (int)(IAPU->OneCycle) *os9x_apu_ratio / 256;
-	
-	memcpy(APURegisters,APURegistersUncached,sizeof(struct SAPURegisters));
-		
-	IAPU->DirectPage+=(IAPU->RAM)-(IAPUuncached->RAM);
-  IAPU->PC+=(IAPU->RAM)-(IAPUuncached->RAM);
+	{
+		PROCESS_EVENT *pEvent = (PROCESS_EVENT *)UNCACHE_PTR(&g_stProcessEvent);
+		pEvent->bMeWorking = true;
+		me_ProcessEvent();
+	}
 	for (;;) {
+		me_ProcessEvent();
 
-		//check if reset or load snapshot occured		
-		if (*apu_init_after_load) {
-			if ((*apu_init_after_load)&1) {								
-				S9xResetSound (TRUE);
-				
-				apu_ram_save=IAPU->RAM;
-				memcpy(IAPU,IAPUuncached,sizeof(struct SIAPU));
-				IAPU->RAM=apu_ram_save;
-				memcpy(IAPU->RAM,IAPUuncached->RAM,0x10000);
-	
-				memcpy(APU,APUuncached,sizeof(struct SAPU));
-				//do it each time since it's updatable from menu
-				for (i = 0; i < 256; i++) S9xAPUCycles [i] = (int)S9xAPUCycleLengths [i] * (int)(IAPU->OneCycle) *os9x_apu_ratio / 256;
-	
-				memcpy(APURegisters,APURegistersUncached,sizeof(struct SAPURegisters));		
-				IAPU->DirectPage+=(IAPU->RAM)-(IAPUuncached->RAM);
-  			IAPU->PC+=(IAPU->RAM)-(IAPUuncached->RAM);			
-												
-    		S9xSetEchoEnable (0);    						
-    	}
-			if ((*apu_init_after_load)&2) {
-				memcpy(&SoundData,(void*)SoundDataPtr,sizeof(SSoundData));
-				(IAPU->PC) = (IAPU->RAM) + (APURegisters->PC);
-				
-								
-				S9xAPUUnpackStatus ();
-				if (APUCheckDirectPage ()) (IAPU->DirectPage) = (IAPU->RAM) + 0x100;
-				else(IAPU->DirectPage) = (IAPU->RAM);				
-				S9xFixSoundAfterSnapshotLoad ();
-				if ((*(p->os9x_apuenabled_ptr)==2)) S9xSetSoundMute( false );
-			}
-			*apu_init_after_load=0;
-		}
-								
-		APU_EXECUTE3 ();
+		APU_SETAPURAM();
+
+		APU_EXECUTE3();
 
 		if (p->mixsample_flag) {
 				p->buffer_idx++;
@@ -1030,30 +1094,19 @@ void me_MixSound(me_sound_t *p){
 				// go to next buffer						
 				p->mixsample_flag=0;
 			}
-					
 		
 		if (p->exit) break;
 		
 	}
-	memcpy((void*)SoundDataPtr,&SoundData,sizeof(SSoundData));
-	
-	(APURegisters->PC) = (IAPU->PC) - (IAPU->RAM);
-  S9xAPUPackStatus ();	
-	memcpy(APURegistersUncached,APURegisters,sizeof(struct SAPURegisters));		
-	
-	apu_ram_save=IAPUuncached->RAM;
-	memcpy(IAPUuncached,IAPU,sizeof(struct SIAPU));			
-	IAPUuncached->RAM=apu_ram_save;	
-	memcpy(IAPUuncached->RAM,IAPU->RAM,0x10000);
-	
-	IAPUuncached->DirectPage+=(IAPUuncached->RAM)-(IAPU->RAM);
-  IAPUuncached->PC+=(IAPUuncached->RAM)-(IAPU->RAM);
-	
-		
-	//*((int*)(APU.OutPorts))=*((int*)(APUuncached->OutPorts));//to avoid losing OutPorts value
-	memcpy(APUuncached,APU,sizeof(struct SAPU));
-	
-	
+	APUPack.APURegisters.PC = APUPack.IAPU.PC - APUPack.IAPU.RAM;
+	S9xAPUPackStatus ();	
+	{
+		// writeback cache
+		me_sceKernelDcacheWritebackInvalidateAll();
+		PROCESS_EVENT *pEvent = (PROCESS_EVENT *)UNCACHE_PTR(&g_stProcessEvent);
+		pEvent->bMeWorking = false;
+	}
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////
@@ -1072,7 +1125,7 @@ void me_StartSound (){
 	p->buffer[2]=(uint8 *)( ((int)SoundBuffer[2])|0x40000000 );	
 	p->buffer[3]=(uint8 *)( ((int)SoundBuffer[3])|0x40000000 );		
 	p->buffer_idx=2;
-	p->sample_count=((so->buffer_size))>>1;
+	p->sample_count=((stSoundStatus.buffer_size))>>1;
 	p->freqratio=snd_freqratio;
 	p->os9x_apuenabled_ptr=(int*)( ((int)&os9x_apuenabled)|0x40000000);
 	p->os9x_paused_ptr=(int*)( ((int)&os9x_paused)|0x40000000);
@@ -1089,7 +1142,7 @@ void me_StartSound (){
 int S9xProcessSound (SceSize ,void *) {
 	int i;
 	uint8 *apu_ram_save;
-	u32 sample_count=(so->buffer_size)>>1;
+	u32 sample_count=(stSoundStatus.buffer_size)>>1;
 //debug_log( "Thread start!" );		
 	memset((char*)SoundBuffer[0],0,sample_count*2);
 	memset((char*)SoundBuffer[1],0,sample_count*2);
@@ -1109,7 +1162,7 @@ int S9xProcessSound (SceSize ,void *) {
   	p->mixsample_flag=1;
   	
   	if ((os9x_apuenabled==2)&&(!os9x_paused)) {
-  		sceAudioOutputPannedBlocking( (so->sound_fd), MAXVOLUME, MAXVOLUME, (char*)((int)SoundBuffer[i]|0x00000000));  	
+  		sceAudioOutputPannedBlocking( (stSoundStatus.sound_fd), MAXVOLUME, MAXVOLUME, (char*)((int)SoundBuffer[i]|0x00000000));  	
   	} else {
   		//memset((char*)SoundBuffer[current_SoundBuffer],0,sample_count*2);  		  		
   		//sceAudioOutputPannedBlocking( (so->sound_fd), MAXVOLUME, MAXVOLUME, (char*)((int)SoundBuffer[i]|0x00000000));  	
@@ -1120,57 +1173,11 @@ int S9xProcessSound (SceSize ,void *) {
   
   me_wait(me_data);	
 #else	
-	apu_ram_save=IAPU->RAM;
-	memcpy(IAPU,IAPUuncached,sizeof(struct SIAPU));
-	IAPU->RAM=apu_ram_save;
-	memcpy(IAPU->RAM,IAPUuncached->RAM,0x10000);
-	
-	memcpy(APU,APUuncached,sizeof(struct SAPU));
-	//do it each time since it's updatable from menu
-	for (i = 0; i < 256; i++) S9xAPUCycles [i] = (int)S9xAPUCycleLengths [i] * (int)(IAPU->OneCycle) *os9x_apu_ratio / 256;
-	
-	memcpy(APURegisters,APURegistersUncached,sizeof(struct SAPURegisters));
-		
-	IAPU->DirectPage+=(IAPU->RAM)-(IAPUuncached->RAM);
-  IAPU->PC+=(IAPU->RAM)-(IAPUuncached->RAM);			
 	do {		
 		int i;		
 		u32 *src,*dst;
 		
-		//check if reset or load snapshot occured		
-		if (*apu_init_after_load) {
-			if ((*apu_init_after_load)&1) {								
-				S9xResetSound (TRUE);
-				
-				apu_ram_save=IAPU->RAM;
-				memcpy(IAPU,IAPUuncached,sizeof(struct SIAPU));
-				IAPU->RAM=apu_ram_save;
-				memcpy(IAPU->RAM,IAPUuncached->RAM,0x10000);
-	
-				memcpy(APU,APUuncached,sizeof(struct SAPU));
-				//do it each time since it's updatable from menu
-				for (i = 0; i < 256; i++) S9xAPUCycles [i] = (int)S9xAPUCycleLengths [i] * (int)(IAPU->OneCycle) *os9x_apu_ratio / 256;
-	
-				memcpy(APURegisters,APURegistersUncached,sizeof(struct SAPURegisters));		
-				IAPU->DirectPage+=(IAPU->RAM)-(IAPUuncached->RAM);
-  			IAPU->PC+=(IAPU->RAM)-(IAPUuncached->RAM);			
-												
-    		S9xSetEchoEnable (0);    		
-    	}
-			if ((*apu_init_after_load)&2) {
-				memcpy(&SoundData,(void*)SoundDataPtr,sizeof(SSoundData));
-				(IAPU->PC) = (IAPU->RAM) + (APURegisters->PC);
-												
-				S9xAPUUnpackStatus ();
-				if (APUCheckDirectPage ()) (IAPU->DirectPage) = (IAPU->RAM) + 0x100;
-				else(IAPU->DirectPage) = (IAPU->RAM);				
-				S9xFixSoundAfterSnapshotLoad ();
-				if (os9x_apuenabled==2) S9xSetSoundMute( false );
-			}
-			*apu_init_after_load=0;			
-		}
-										
-		if ((os9x_apuenabled==2)&&(!os9x_paused)&&((*apu_init_after_load)==0) ) {
+		if ((os9x_apuenabled==2)&&(!os9x_paused)) {
 			src=(u32*)SoundBuffer[2];
 	  	dst=(u32*)SoundBuffer[current_SoundBuffer];
 	  		  		  		  		  		  	  		  		  	
@@ -1194,7 +1201,7 @@ int S9xProcessSound (SceSize ,void *) {
 	  		}
 	  	}
 	  	i=current_SoundBuffer;
-  		sceAudioOutputPannedBlocking( (so->sound_fd), MAXVOLUME, MAXVOLUME, (char*)SoundBuffer[i]);  	
+  		sceAudioOutputPannedBlocking( (stSoundStatus.sound_fd), MAXVOLUME, MAXVOLUME, (char*)SoundBuffer[i]);  	
   		current_SoundBuffer^=1;					
   		  	
   	} else {
@@ -1208,24 +1215,6 @@ int S9xProcessSound (SceSize ,void *) {
   	//current_SoundBuffer^=1;					
   	
   } while (Settings.ThreadSound);
-  memcpy((void*)SoundDataPtr,&SoundData,sizeof(SSoundData));
-	
-	(APURegisters->PC) = (IAPU->PC) - (IAPU->RAM);
-  S9xAPUPackStatus ();	
-	memcpy(APURegistersUncached,APURegisters,sizeof(struct SAPURegisters));		
-	
-	apu_ram_save=IAPUuncached->RAM;
-	memcpy(IAPUuncached,IAPU,sizeof(struct SIAPU));			
-	IAPUuncached->RAM=apu_ram_save;	
-	memcpy(IAPUuncached->RAM,IAPU->RAM,0x10000);
-	
-	IAPUuncached->DirectPage+=(IAPUuncached->RAM)-(IAPU->RAM);
-  IAPUuncached->PC+=(IAPUuncached->RAM)-(IAPU->RAM);
-	
-		
-	//*((int*)(APU.OutPorts))=*((int*)(APUuncached->OutPorts));//to avoid losing OutPorts value
-	memcpy(APUuncached,APU,sizeof(struct SAPU));
-	
 #endif
 //	debug_log( "thread end"); 
   return (0);
@@ -1256,9 +1245,6 @@ void InitSoundThread(){
 	sceKernelStartThread( g_sndthread, 0, 0 );
 			
 	sceKernelDelayThread(100*1000);
-	while (*apu_init_after_load) {
-		sceKernelDelayThread(100*1000);
-	}
 	//debug_log( "Thread ok" );
 }
 
@@ -1497,7 +1483,6 @@ bool8 S9xInitUpdate() {
   	sceGuSync(0,0);
   	  	  	
 	}
-	
 	return TRUE;
 }
 
@@ -1564,6 +1549,10 @@ void after_pause(){
 	else S9xSetSoundMute( true );
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////
+// Ge Callback
+////////////////////////////////////////////////////////////////////////////////////////
 struct timeval	now;
 	unsigned long long	diff;
 	static int fps_val=0;
@@ -1630,8 +1619,7 @@ bool8 S9xDeinitUpdate (int Width, int Height, bool8 sixteen_bit) {
 				break;
 		}
 	}
-	
-	
+
 	if (os9x_showpass){		
 		sprintf(buf,"%03d",os9x_renderingpass);
 		pgPrintBG(CMAX_X-8-strlen(buf),0,0xffff,buf);
@@ -1690,19 +1678,26 @@ bool8 S9xDeinitUpdate (int Width, int Height, bool8 sixteen_bit) {
 			pgPrintBG( CMAX_X - 7, 1, 0xffff, buf );									
 		}					
 	}
-	
-	/*{
-		char st[32];
-		sprintf(st,"%08X",*apu_glob_cycles);
-		pgPrintBG(CMAX_X-10,7,0xFFFF,st);
-		sprintf(st,"%08X",APUuncached->Cycles);
-		pgPrintBG(CMAX_X-10,8,0xFFFF,st);
-		sprintf(st,"%08X",cpu_glob_cycles);
-		pgPrintBG(CMAX_X-10,9,0xFFFF,st);
-		sprintf(st,"%d %d",(*apu_event1_cpt1)&(65536*2-1),(*apu_event1_cpt2)&(65536*2-1));		
-		pgPrintBG(CMAX_X-20,10,0xFFFF,st);
-		sprintf(st,"%d %d",(*apu_event2_cpt1)&(65536*2-1),(*apu_event2_cpt2)&(65536*2-1));
-		pgPrintBG(CMAX_X-20,11,0xFFFF,st);
+	MyCounter_drawCount();
+/*	{
+		char st[108];
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		volatile PROCESS_EVENT *pEvent = (PROCESS_EVENT *)UNCACHE_PTR(&g_stProcessEvent);
+		SAPUEVENTS *pEvent2 = (SAPUEVENTS *)UNCACHE_PTR(&stAPUEvents);\
+		sprintf(st,"Apu%d, %02X,s%d,w%d,[%02X,%02X] - %02X,%02X,%02X,%02X,%02X,%02X",
+			pEvent2->IAPU_APUExecuting,
+			pEvent->wCallCount, pEvent->wSuspend, pEvent->bMeWorking, pEvent->bMeQueuePtr, pEvent->bMainQueuePtr,
+			pEvent->dwDummy[0], pEvent->dwDummy[1], pEvent->dwDummy[2], pEvent->dwDummy[3], pEvent->dwDummy[4], pEvent->dwDummy[5]);
+		pgPrintBG(0,1,0xFFFF,st);
+		sprintf(st,"%08X, %08X, %08X, Out[%02X,%02X,%02X,%02X]",
+			pEvent2->APU_Cycles, pEvent2->apu_glob_cycles, cpu_glob_cycles,
+			pEvent2->APU_OutPorts[0], pEvent2->APU_OutPorts[1], pEvent2->APU_OutPorts[2], pEvent2->APU_OutPorts[3]);
+		pgPrintBG(0,2,0xFFFF,st);
+		sprintf(st,"APU[%08X,%08X,%08X,%08X]",
+			pEvent2->adwParam[0], pEvent2->adwParam[1], pEvent2->adwParam[2], pEvent2->adwParam[3]);
+		pgPrintBG(0,3,0xFFFF,st);
 	}*/
 	
 	/*{
@@ -1710,8 +1705,7 @@ bool8 S9xDeinitUpdate (int Width, int Height, bool8 sixteen_bit) {
 		sprintf(st,"%08X",os9x_updatepadFrame);
 		pgPrintBG(CMAX_X-10,7,0xFFFF,st);
 	}*/
-	
-	
+
 	return TRUE;
 }
 
@@ -1755,9 +1749,9 @@ void S9xProcessEvents( bool8 block ) {
 		}
 		before_pause();
 		if (!os9x_lowbat) {
-			if (CPU.SRAMModified) {
+			if (CPUPack.CPU.SRAMModified) {
 				Memory.SaveSRAM( (char*)S9xGetSaveFilename(".SRM") );
-				CPU.SRAMModified=0;
+				CPUPack.CPU.SRAMModified=0;
 			}
 		}
 		//initUSBdrivers();								
@@ -2189,12 +2183,11 @@ void low_level_init(){
 	//do some uncaching stuff
 	os9x_paused_ptr=(int*)UNCACHE_PTR(&os9x_paused);
 	os9x_apuenabled_ptr=(int*)UNCACHE_PTR(&os9x_apuenabled);						
-	so = (SoundStatus *)UNCACHE_PTR(malloc(sizeof(SoundStatus )));
+//	so = (SoundStatus *)UNCACHE_PTR(malloc(sizeof(SoundStatus )));
 			
 	sceKernelDcacheWritebackInvalidateAll();
-	(so->sound_fd) = -1;	
+	stSoundStatus.sound_fd = -1;	
 	
-	S9xAllocSound();	
 	S9xInitAPU();
 			
 			
@@ -2222,7 +2215,6 @@ void low_level_deinit(){
 	//snd_beep2_current=0;
 	
 	S9xDeinitAPU();
-	S9xFreeSound();
 	
 	//OSK
 	danzeff_free();
@@ -2930,7 +2922,7 @@ int init_snes_rom() {
   Settings.Stereo = true;
   Settings.AltSampleDecode = 0;//os9x_sampledecoder;
   Settings.ReverseStereo = FALSE;
-  Settings.SoundBufferSize = 1024;//4;
+  Settings.SoundBufferSize = 256;//4;
   Settings.SoundMixInterval = 0;//20;
 	Settings.DisableSampleCaching=TRUE;	
 	Settings.FixFrequency = true;
@@ -3004,7 +2996,7 @@ int init_snes_rom() {
 	S9xInitSound( Settings.SoundPlaybackRate, Settings.Stereo, Settings.SoundBufferSize );	
 	S9xSetSoundMute( TRUE );
 	
-	uint32 saved_flags = CPU.Flags;
+	uint32 saved_flags = CPUPack.CPU.Flags;
 	
 	//msgBoxLines("Loading ROM...",0);
 	pgCopyScreen();
@@ -3067,7 +3059,7 @@ int init_snes_rom() {
 		}
 	}
 
-	CPU.Flags = saved_flags;
+	CPUPack.CPU.Flags = saved_flags;
 	
 	S9xInitDisplay();
 	if ( !S9xGraphicsInit() ){
@@ -3101,7 +3093,6 @@ int init_snes_rom() {
 	os9x_netsynclost=0;
 	os9x_oldframe=0;
 	os9x_updatepadcpt=0;
-			
 	return 0;
 }
 
@@ -3256,3 +3247,29 @@ int user_main(SceSize args, void* argp) {
 
 }
 
+/////////////////////////////////////////////////////////////////////
+// ƒJƒEƒ“ƒ^ŽÀ‘Ô
+
+uint32 g_nCount;
+clock_t g_ulStart;
+
+void MyCounter_Init(void)
+{
+	g_nCount = 0;
+	g_ulStart = sceKernelLibcClock();
+}
+void MyCounter_drawCount()
+{
+	if (g_ulStart != 0xFFFFFFFF) {
+		clock_t dwTime = sceKernelLibcClock();
+		if (20000000 < dwTime - g_ulStart) {
+			g_ulStart = 0xFFFFFFFF;
+		}
+		else {
+			g_nCount++;
+		}
+	}
+	char szBuf[16];
+	sprintf(szBuf,"%d",g_nCount);
+	pgPrintBG(0,0,0xffff,szBuf);
+}

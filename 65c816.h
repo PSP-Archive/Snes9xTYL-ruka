@@ -64,36 +64,36 @@
 #define Negative  128
 #define Emulation 256
 
-#define ClearCarry() (ICPU._Carry = 0)
-#define SetCarry() (ICPU._Carry = 1)
-#define SetZero() (ICPU._Zero = 0)
-#define ClearZero() (ICPU._Zero = 1)
-#define SetIRQ() (Registers.PL |= IRQ)
-#define ClearIRQ() (Registers.PL &= ~IRQ)
-#define SetDecimal() (Registers.PL |= Decimal)
-#define ClearDecimal() (Registers.PL &= ~Decimal)
-#define SetIndex() (Registers.PL |= IndexFlag)
-#define ClearIndex() (Registers.PL &= ~IndexFlag)
-#define SetMemory() (Registers.PL |= MemoryFlag)
-#define ClearMemory() (Registers.PL &= ~MemoryFlag)
-#define SetOverflow() (ICPU._Overflow = 1)
-#define ClearOverflow() (ICPU._Overflow = 0)
-#define SetNegative() (ICPU._Negative = 0x80)
-#define ClearNegative() (ICPU._Negative = 0)
+#define ClearCarry() (CPUPack.ICPU._Carry = 0)
+#define SetCarry() (CPUPack.ICPU._Carry = 1)
+#define SetZero() (CPUPack.ICPU._Zero = 0)
+#define ClearZero() (CPUPack.ICPU._Zero = 1)
+#define SetIRQ() (CPUPack.Registers.PL |= IRQ)
+#define ClearIRQ() (CPUPack.Registers.PL &= ~IRQ)
+#define SetDecimal() (CPUPack.Registers.PL |= Decimal)
+#define ClearDecimal() (CPUPack.Registers.PL &= ~Decimal)
+#define SetIndex() (CPUPack.Registers.PL |= IndexFlag)
+#define ClearIndex() (CPUPack.Registers.PL &= ~IndexFlag)
+#define SetMemory() (CPUPack.Registers.PL |= MemoryFlag)
+#define ClearMemory() (CPUPack.Registers.PL &= ~MemoryFlag)
+#define SetOverflow() (CPUPack.ICPU._Overflow = 1)
+#define ClearOverflow() (CPUPack.ICPU._Overflow = 0)
+#define SetNegative() (CPUPack.ICPU._Negative = 0x80)
+#define ClearNegative() (CPUPack.ICPU._Negative = 0)
 
-#define CheckZero() (ICPU._Zero == 0)
-#define CheckCarry() (ICPU._Carry)
-#define CheckIRQ() (Registers.PL & IRQ)
-#define CheckDecimal() (Registers.PL & Decimal)
-#define CheckIndex() (Registers.PL & IndexFlag)
-#define CheckMemory() (Registers.PL & MemoryFlag)
-#define CheckOverflow() (ICPU._Overflow)
-#define CheckNegative() (ICPU._Negative & 0x80)
-#define CheckEmulation() (Registers.P.W & Emulation)
+#define CheckZero() (CPUPack.ICPU._Zero == 0)
+#define CheckCarry() (CPUPack.ICPU._Carry)
+#define CheckIRQ() (CPUPack.Registers.PL & IRQ)
+#define CheckDecimal() (CPUPack.Registers.PL & Decimal)
+#define CheckIndex() (CPUPack.Registers.PL & IndexFlag)
+#define CheckMemory() (CPUPack.Registers.PL & MemoryFlag)
+#define CheckOverflow() (CPUPack.ICPU._Overflow)
+#define CheckNegative() (CPUPack.ICPU._Negative & 0x80)
+#define CheckEmulation() (CPUPack.Registers.P.W & Emulation)
 
-#define ClearFlags(f) (Registers.P.W &= ~(f))
-#define SetFlags(f)   (Registers.P.W |=  (f))
-#define CheckFlag(f)  (Registers.PL & (f))
+#define ClearFlags(f) (CPUPack.Registers.P.W &= ~(f))
+#define SetFlags(f)   (CPUPack.Registers.P.W |=  (f))
+#define CheckFlag(f)  (CPUPack.Registers.PL & (f))
 
 typedef union
 {
@@ -105,9 +105,16 @@ typedef union
     uint16 W/*,dummy*/;
 } pair;
 
+
 struct SRegisters{
-    uint8 /*uint32*/  PB;
-    uint8 /*uint32*/  DB;
+	union {
+		uint8 /*uint32*/  PB[4];
+		uint32 ShiftedPB;
+	};
+	union {
+		uint8 /*uint32*/  DB[4];
+		uint32 ShiftedDB;
+	};
     pair   P;
     pair   A;
     pair   D;
@@ -116,9 +123,5 @@ struct SRegisters{
     pair   Y;
     uint16 /*uint32*/ PC;
 };
-
-//EXTERN_C struct SRegisters Registers;
-
-#define Registers	CPU.Regs
 
 #endif

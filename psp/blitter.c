@@ -90,6 +90,14 @@ void guClear(int dst_w,int dst_h){
   sceGuSync(0,0);
 }
 
+typedef struct {
+    unsigned int* start;
+    unsigned int* current;
+    int parent_context;
+} GuDisplayList;
+extern GuDisplayList* gu_list; // guInternal.h
+extern int g_cbid;
+
 void guDrawBuffer(u16* video_buffer,int src_w,int src_h,int src_pitch,int dst_w,int dst_h){
   unsigned int j,cx,cy;
   struct Vertex* vertices,*vertices_ptr;
@@ -147,11 +155,15 @@ void guDrawBuffer(u16* video_buffer,int src_w,int src_h,int src_pitch,int dst_w,
   
       
   sceGuFinish();
+//  sceGeListEnQueue(gu_list->start,gu_list->current,g_cbid,NULL);
   sceGuSync(0,0);
-  if (os9x_vsync) sceDisplayWaitVblankStart();		
-  sceGuSwapBuffers();  
+#define pg_vramtop ((char *)0x04000000)
   swap_buf^=1;
-	pg_drawframe=swap_buf^1;
+  pg_drawframe=swap_buf^1;
+  sceDisplaySetFrameBuf(pg_vramtop+(pg_drawframe?FRAMESIZE:0),LINESIZE,1,
+		os9x_vsync ? PSP_DISPLAY_SETBUF_NEXTFRAME: PSP_DISPLAY_SETBUF_IMMEDIATE);
+  //if (os9x_vsync) sceDisplayWaitVblankStart();		
+  //sceGuSwapBuffers();  
 }
 
 void blit_shutdown(){

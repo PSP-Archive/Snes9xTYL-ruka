@@ -128,9 +128,10 @@ typedef struct {
     int32  play_position;
     uint32 err_counter;
     uint32 err_rate;
+	uint32 dwDummy[6];
 } SoundStatus;
 
-EXTERN_C volatile SoundStatus *so;
+EXTERN_C SoundStatus stSoundStatus;
 
 typedef struct {
     int state;
@@ -194,10 +195,10 @@ typedef struct
     int noise_hertz;
     Channel channels [NUM_CHANNELS];    
     bool8 no_filter;
+	uint32 dwDummy[32];
 } SSoundData;
 
 EXTERN_C SSoundData SoundData;
-EXTERN_C volatile SSoundData *SoundDataPtr;
 
 void S9xSetSoundVolume (int channel, short volume_left, short volume_right);
 void S9xSetSoundFrequency (int channel, int hertz);
@@ -236,8 +237,6 @@ EXTERN_C void S9xMixSamples (uint8 *buffer, int sample_count);
 bool8 S9xOpenSoundDevice (int, bool8, int);
 void S9xSetPlaybackRate (uint32 rate);
 
-EXTERN_C void S9xFreeSound ();
-EXTERN_C void S9xAllocSound ();
 EXTERN_C bool8 S9xInitSound (int mode, bool8 stereo, int buffer_size);
 #endif
 
