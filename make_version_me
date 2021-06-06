@@ -1,0 +1,4 @@
+#!/bin/sh
+
+VERSION=`grep EMUNAME_VERSION psp/psp.h|cut -d'"' -f2`
+mksfo "$VERSION"me PARAM.SFO

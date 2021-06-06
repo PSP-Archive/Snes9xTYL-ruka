@@ -1,0 +1,14 @@
+./cpuexec_opti.cpp:
+./cpuexec.h
+./debug.h
+./snapshot.h
+./gfx.h
+./missing.h
+./apu.h
+./dma.h
+./fxemu.h
+./sa1.h
+./snes9x.h
+./memmap.h
+./cpuops.h
+./ppu.h

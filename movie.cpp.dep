@@ -1,0 +1,5 @@
+./movie.cpp:
+./movie.h
+./snes9x.h
+./cpuexec.h
+./snapshot.h

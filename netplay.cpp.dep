@@ -1,0 +1,7 @@
+./netplay.cpp:
+./display.h
+./snes9x.h
+./cpuexec.h
+./netplay.h
+./memmap.h
+./snapshot.h

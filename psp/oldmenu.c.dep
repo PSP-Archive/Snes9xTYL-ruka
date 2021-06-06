@@ -1,0 +1,6 @@
+./psp/oldmenu.c:
+./psp/img_jpeg.h
+./psp/help_data.c
+./psp/psp.h
+./psp/blitter.h
+./snes9x.h
